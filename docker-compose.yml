@@ -9,16 +9,17 @@ services:
       - "8000:8000"
     volumes:
       - n8n_hub_data:/data
-      - ./data/workflows:/app/data/workflows:ro
     environment:
+      - PYTHONUNBUFFERED=1
       - DB_PATH=/data/workflows.db
-      - LOCAL_WORKFLOWS_DIR=/app/data/workflows
       - ADMIN_USER=admin
       - ADMIN_PASS=${ADMIN_PASS:-changeme}
       - SECRET_KEY=${SECRET_KEY:-your-random-secret-key-here}
-      - INITIAL_REPOS=
+      - INITIAL_REPOS=${INITIAL_REPOS:-https://github.com/DragonJAR/n8n-workflows-esp/tree/main/workflows}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - SYNC_INTERVAL_HOURS=24
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-models/gemini-flash-latest}
 
 volumes:
   n8n_hub_data:

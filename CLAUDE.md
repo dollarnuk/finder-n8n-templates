@@ -36,7 +36,9 @@ d:\PROJECT\N8N Find workflows\
 ├── CLAUDE.md               ← ЦЕЙ ФАЙЛ (архітектура для AI)
 ├── app.py                  ← FastAPI сервер, API routes, auth (250 рядків)
 ├── database.py             ← SQLite + FTS5, CRUD операції (287 рядків)
-├── importer.py             ← Парсинг JSON, імпорт з різних джерел (420 рядків)
+├── importer.py             ← Парсинг JSON, імпорт з джерел (420 рядків)
+├── analyzer.py             ← Менеджер AI-аналізу (Gemini)
+├── ai_search.py            ← AI Chat Search (Gemini)
 ├── templates/
 │   └── index.html          ← Єдиний HTML шаблон, вся UI (957 рядків)
 ├── Dockerfile              ← Docker образ (python:3.12-slim)
@@ -56,26 +58,33 @@ d:\PROJECT\N8N Find workflows\
 
 ## Архітектура
 
-### Потік даних
+### Архітектурна діаграма
 
+```mermaid
+graph TD
+    Sources[Sources: GitHub, Files, n8n.io] --> Importer[importer.py]
+    Importer --> Metadata[Metadata: nodes, categories, triggers]
+    Metadata --> DB_Write[database.py: insert_workflows_batch]
+    DB_Write --> SQLite[(SQLite: workflows)]
+    SQLite --> FTS[SQLite FTS5: workflows_fts]
+    
+    SQLite --> Analyzer[analyzer.py: Gemini AI]
+    Analyzer --> Scores[Scores: Usefulness, Complexity, etc.]
+    Scores --> SQLite
+    
+    User[User Query] --> AI_Search[ai_search.py: Gemini AI]
+    AI_Search --> FTS_Query[Optimized FTS5 Query + Filters]
+    FTS_Query --> SQLite
+    SQLite --> UI[templates/index.html]
 ```
-Джерело (GitHub / n8n.io / файл / папка)
-    ↓
-importer.py: parse_workflow_json()
-    → Витягує: name, description, nodes, categories, trigger_type
-    → Обчислює: json_hash (SHA256, перші 16 символів)
-    ↓
-database.py: insert_workflow() / insert_workflows_batch()
-    → Зберігає в SQLite таблицю workflows
-    → Заповнює lookup-таблиці workflow_nodes, workflow_categories
-    → FTS5 тригери автоматично оновлюють workflows_fts
-    ↓
-app.py: GET /api/search?q=...&category=...&node=...
-    → database.py: search_workflows()
-    → FTS5 MATCH для тексту + subquery по lookup-таблицях для фільтрів
-    ↓
-templates/index.html: JavaScript fetch → рендер карток
-```
+
+### Як це працює (Логіка)
+
+1. **Ініціалізація**: При першому запуску (`lifespan`) додаток перевіряє `DB_PATH`. Якщо БД порожня, він сканує `LOCAL_WORKFLOWS_DIR` та виконує масовий імпорт через `insert_workflows_batch`.
+2. **Аналіз метаданих**: `importer.py` не просто читає JSON, а парсить його структуру, рахує ноди та автоматично призначає категорії за типом нод (на основі `NODE_CATEGORIES`). Це дозволяє фільтрувати воркфлоу без AI.
+3. **AI-Збагачення**: `analyzer.py` працює асинхронно. Він бере JSON структуру воркфлоу, відправляє в Gemini та отримує оцінки (1-10) та summary. Це дозволяє ранжувати воркфлоу за якістю.
+4. **Розумний пошук**: Коли користувач пише в чат, `ai_search.py` запитує Gemini: "На що це схоже з наших категорій/нод?". AI повертає не просто відповідь, а параметри для SQL запиту.
+5. **Продуктивність**: Вся база (~4200 записів) працює миттєво завдяки SQLite FTS5 (повнотекстовий пошук) та lookup-таблицям для нод і категорій (O(1) замість O(n)).
 
 ### Таблиці БД
 
@@ -160,6 +169,10 @@ templates/index.html: JavaScript fetch → рендер карток
 | `POST /api/repos/sync/{id}` | POST | Синхронізувати один репо (потрібна auth) |
 | `POST /api/repos/sync-all` | POST | Синхронізувати всі репо (потрібна auth) |
 | `DELETE /api/repos/{id}` | DELETE | Видалити репо (потрібна auth) |
+| `POST /api/analyze/{id}` | POST | AI-аналіз одного воркфлоу (auth) |
+| `POST /api/analyze/batch` | POST | AI-аналіз партією (auth) |
+| `POST /api/chat` | POST | AI Chat Search (пошук природною мовою) |
+| `GET /api/workflow/{id}/import` | GET | Миттєвий імпорт в n8n (Import from URL) |
 | `GET /api/filters` | GET | Списки нод та категорій (для оновлення фільтрів) |
 | `GET /api/stats` | GET | Статистика |
 
@@ -190,6 +203,9 @@ templates/index.html: JavaScript fetch → рендер карток
 | `INITIAL_REPOS` | `""` | Comma-separated GitHub URLs для імпорту при першому запуску |
 | `GITHUB_TOKEN` | `""` | GitHub Personal Access Token (для збільшення rate limit) |
 | `SYNC_INTERVAL_HOURS` | `24` | Інтервал автосинхронізації GitHub репо (годин) |
+| `GEMINI_API_KEY` | `""` | Google AI (Gemini) API Key |
+| `GEMINI_MODEL` | `gemini-flash-latest` | Модель Gemini для аналізу |
+| `PYTHONUNBUFFERED` | `1` | Рекомендовано для логів |
 
 ---
 
@@ -209,12 +225,11 @@ templates/index.html: JavaScript fetch → рендер карток
 
 ## Що потрібно допрацювати
 
-### Фаза 2 — UX покращення
-
-- [ ] **SSE прогрес-бар для імпорту** — зараз імпорт з GitHub довгий і без зворотного зв'язку. Потрібен Server-Sent Events для показу прогресу в реальному часі
-- [ ] **Searchable dropdowns для фільтрів** — зараз звичайні `<select>`, при 400+ нодах важко знайти потрібну. Потрібен пошук у dropdown (можна select2, tom-select, або кастомний)
-- [ ] **Редагування воркфлоу** — `PUT /api/workflow/{id}` endpoint для оновлення name/description
-- [ ] **Сортування** — за назвою, датою, кількістю нод
+- [x] **AI-аналіз та оцінка** — `ai_usefulness`, `ai_complexity` тощо (через Gemini)
+- [x] **AI Chat-пошук** — природна мова → SQL/FTS5 через AI
+- [x] **Instant Import** — URL для прямого імпорту в n8n (Phase 2C)
+- [ ] **SSE прогрес-бар для імпорту** — зараз імпорт з GitHub довгий і без зворотного зв'язку.
+- [ ] **Searchable dropdowns для фільтрів** — зараз звичайні `<select>`, при 400+ нодах важко знайти потрібну.
 - [ ] **Експорт колекції** — завантажити всі або відфільтровані воркфлоу як ZIP
 
 ### Фаза 3 — Docker та деплой
@@ -288,3 +303,10 @@ docker run -d -p 8000:8000 -v n8n_data:/data -v ./data/workflows:/app/data/workf
 5. **XSS захист** — у фронтенді всі дані проходять через `esc()` функцію перед вставкою в DOM. При додаванні нового коду, завжди використовуйте `esc()` для user-generated content.
 
 6. **Категорії** — визначаються автоматично за типом нод через `NODE_CATEGORIES` маппінг в `importer.py`. Для додавання нової категорії, додайте маппінг в цей словник.
+
+7. **Gemini SDK нюанси**: 
+   - Використовуйте `transport="rest"` у `genai.configure()`. gRPC може зависати в деяких середовищах Windows.
+   - Викликайте `model.generate_content` через `asyncio.to_thread()`, навіть якщо бібліотека має асинхронні методи. Це вирішує проблему з "awaitable properties" та неочікуваною поведінкою SDK.
+   - Бажана модель: `models/gemini-flash-latest` (або `gemini-1.5-flash`).
+
+8. **AI Search (FTS5)**: `ai_search.py` конвертує запит користувача у JSON з `fts_query`. Це поле автоматично розбивається на слова з оператором `OR` для максимального покриття через FTS5.

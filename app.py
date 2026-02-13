@@ -13,6 +13,8 @@ from database import init_db, search_workflows, get_workflow, delete_workflow, \
     get_all_nodes, get_all_categories, get_stats, get_github_repos, delete_github_repo
 from importer import import_from_json, import_from_url, import_from_directory, \
     sync_github_repo, sync_all_repos
+from analyzer import analyze_and_save, analyze_batch
+from ai_search import perform_ai_search
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,6 +93,13 @@ def require_auth(request: Request):
         raise HTTPException(status_code=401, detail="Необхідна авторизація")
 
 
+# ==================== Health Check ====================
+
+@app.get("/health")
+async def health():
+    return JSONResponse({"status": "ok"})
+
+
 # ==================== API Routes ====================
 
 @app.get("/", response_class=HTMLResponse)
@@ -122,8 +131,10 @@ async def logout(request: Request):
 
 
 @app.get("/api/search")
-async def api_search(q: str = "", category: str = "", node: str = "", page: int = 1):
-    results = search_workflows(query=q, category=category, node=node, page=page)
+async def api_search(q: str = "", category: str = "", node: str = "", page: int = 1,
+                     sort: str = "recent", min_score: int = 0):
+    results = search_workflows(query=q, category=category, node=node, page=page,
+                               sort=sort, min_score=min_score)
     for wf in results["workflows"]:
         wf["nodes"] = json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"]
         wf["categories"] = json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"]
@@ -137,6 +148,7 @@ async def api_get_workflow(wf_id: int):
         raise HTTPException(status_code=404, detail="Воркфлоу не знайдено")
     wf["nodes"] = json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"]
     wf["categories"] = json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"]
+    wf["ai_tags"] = json.loads(wf["ai_tags"]) if isinstance(wf.get("ai_tags"), str) else wf.get("ai_tags", [])
     return JSONResponse(wf)
 
 
@@ -242,6 +254,52 @@ async def api_get_filters():
 @app.get("/api/stats")
 async def api_get_stats():
     return JSONResponse(get_stats())
+
+
+# ==================== AI Analysis Routes ====================
+
+@app.post("/api/analyze/{wf_id}")
+async def api_analyze_workflow(request: Request, wf_id: int):
+    require_auth(request)
+    result = await analyze_and_save(wf_id)
+    if "error" in result:
+        return JSONResponse(result, status_code=400)
+    return JSONResponse(result)
+
+
+@app.post("/api/analyze/batch")
+async def api_analyze_batch(request: Request, limit: int = 50):
+    require_auth(request)
+    result = await analyze_batch(limit=limit)
+    if "error" in result:
+        return JSONResponse(result, status_code=400)
+    return JSONResponse(result)
+
+
+# ==================== AI Chat Search ====================
+
+@app.post("/api/chat")
+async def api_chat_search(request: Request, body: dict = None):
+    query = (body or {}).get("query", "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Query is required")
+    
+    result = await perform_ai_search(query)
+    return JSONResponse(result)
+
+
+# ==================== Instant Import for n8n ====================
+
+@app.get("/api/workflow/{wf_id}/import")
+async def api_workflow_import_url(wf_id: int):
+    """Returns clean n8n JSON for direct import via 'Import from URL' in n8n."""
+    wf = get_workflow(wf_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Воркфлоу не знайдено")
+    return Response(
+        content=wf["json_content"],
+        media_type="application/json",
+    )
 
 
 if __name__ == "__main__":

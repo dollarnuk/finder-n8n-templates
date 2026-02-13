@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.example
+.dockerignore
+__pycache__
+*.pyc
+*.db
+*.db-shm
+*.db-wal
+data/
+CLAUDE.md
+README.md
+docker-compose.yml
+available_models.txt
+gemini_models.txt
+nul

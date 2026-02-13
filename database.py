@@ -38,7 +38,14 @@ def init_db():
             json_content TEXT NOT NULL,
             json_hash TEXT UNIQUE NOT NULL,
             added_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            ai_usefulness INTEGER DEFAULT 0,
+            ai_universality INTEGER DEFAULT 0,
+            ai_complexity INTEGER DEFAULT 0,
+            ai_scalability INTEGER DEFAULT 0,
+            ai_summary TEXT DEFAULT '',
+            ai_tags TEXT DEFAULT '[]',
+            ai_analyzed_at TEXT DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS github_repos (
@@ -91,7 +98,28 @@ def init_db():
         END;
     """)
     conn.commit()
+    _migrate_ai_columns()
     _migrate_lookup_tables()
+
+
+def _migrate_ai_columns():
+    """Add AI analysis columns to existing workflows table if missing."""
+    conn = get_db()
+    cursor = conn.execute("PRAGMA table_info(workflows)")
+    columns = {row[1] for row in cursor.fetchall()}
+    ai_columns = {
+        "ai_usefulness": "INTEGER DEFAULT 0",
+        "ai_universality": "INTEGER DEFAULT 0",
+        "ai_complexity": "INTEGER DEFAULT 0",
+        "ai_scalability": "INTEGER DEFAULT 0",
+        "ai_summary": "TEXT DEFAULT ''",
+        "ai_tags": "TEXT DEFAULT '[]'",
+        "ai_analyzed_at": "TEXT DEFAULT ''",
+    }
+    for col, col_type in ai_columns.items():
+        if col not in columns:
+            conn.execute(f"ALTER TABLE workflows ADD COLUMN {col} {col_type}")
+    conn.commit()
 
 
 def _migrate_lookup_tables():
@@ -181,7 +209,8 @@ def insert_workflows_batch(workflows_data):
     return imported, duplicates
 
 
-def search_workflows(query="", category="", node="", page=1, per_page=24):
+def search_workflows(query="", category="", node="", page=1, per_page=24,
+                     sort="recent", min_score=0):
     conn = get_db()
     conditions = []
     params = []
@@ -199,16 +228,31 @@ def search_workflows(query="", category="", node="", page=1, per_page=24):
         conditions.append("w.id IN (SELECT workflow_id FROM workflow_nodes WHERE node_name = ?)")
         params.append(node)
 
+    if min_score > 0:
+        conditions.append("w.ai_usefulness >= ?")
+        params.append(min_score)
+
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
     offset = (page - 1) * per_page
+
+    # Sort options
+    sort_map = {
+        "recent": "w.added_at DESC",
+        "usefulness": "w.ai_usefulness DESC, w.added_at DESC",
+        "complexity_asc": "w.ai_complexity ASC, w.added_at DESC",
+        "complexity_desc": "w.ai_complexity DESC, w.added_at DESC",
+        "nodes": "w.node_count DESC, w.added_at DESC",
+    }
+    order_by = sort_map.get(sort, "w.added_at DESC")
 
     count = conn.execute(f"SELECT COUNT(*) FROM workflows w {where}", params).fetchone()[0]
 
     rows = conn.execute(f"""
         SELECT w.id, w.name, w.description, w.nodes, w.categories, w.node_count,
-               w.trigger_type, w.source_url, w.source_repo, w.added_at
+               w.trigger_type, w.source_url, w.source_repo, w.added_at,
+               w.ai_usefulness, w.ai_complexity, w.ai_summary
         FROM workflows w {where}
-        ORDER BY w.added_at DESC
+        ORDER BY {order_by}
         LIMIT ? OFFSET ?
     """, params + [per_page, offset]).fetchall()
 
@@ -250,7 +294,37 @@ def get_stats():
     total = conn.execute("SELECT COUNT(*) FROM workflows").fetchone()[0]
     repos = conn.execute("SELECT COUNT(*) FROM github_repos").fetchone()[0]
     unique_nodes = conn.execute("SELECT COUNT(DISTINCT node_name) FROM workflow_nodes").fetchone()[0]
-    return {"total_workflows": total, "total_repos": repos, "unique_nodes": unique_nodes}
+    analyzed = conn.execute("SELECT COUNT(*) FROM workflows WHERE ai_analyzed_at != ''").fetchone()[0]
+    avg_usefulness = conn.execute("SELECT COALESCE(AVG(ai_usefulness), 0) FROM workflows WHERE ai_analyzed_at != ''").fetchone()[0]
+    return {
+        "total_workflows": total, "total_repos": repos, "unique_nodes": unique_nodes,
+        "analyzed_count": analyzed, "avg_usefulness": round(avg_usefulness, 1)
+    }
+
+
+def update_workflow_ai(wf_id, usefulness, universality, complexity, scalability, summary, tags):
+    """Update AI analysis scores for a workflow."""
+    conn = get_db()
+    conn.execute("""
+        UPDATE workflows SET
+            ai_usefulness = ?, ai_universality = ?, ai_complexity = ?,
+            ai_scalability = ?, ai_summary = ?, ai_tags = ?,
+            ai_analyzed_at = ?
+        WHERE id = ?
+    """, (usefulness, universality, complexity, scalability, summary,
+          json.dumps(tags, ensure_ascii=False), datetime.utcnow().isoformat(), wf_id))
+    conn.commit()
+
+
+def get_unanalyzed_workflows(limit=50):
+    """Get workflows that haven't been analyzed by AI yet."""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT id, name, description, nodes, categories, node_count, trigger_type, json_content
+        FROM workflows WHERE ai_analyzed_at = '' OR ai_analyzed_at IS NULL
+        LIMIT ?
+    """, (limit,)).fetchall()
+    return [dict(r) for r in rows]
 
 
 # GitHub repos management
