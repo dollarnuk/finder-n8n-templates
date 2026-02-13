@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>n8n Hub — База воркфлоу</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e17;
+  --bg-card: #111827;
+  --bg-card-hover: #1a2332;
+  --bg-surface: #0f1520;
+  --border: #1e293b;
+  --border-hover: #334155;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #f97316;
+  --accent-glow: rgba(249,115,22,0.15);
+  --accent2: #06b6d4;
+  --accent3: #8b5cf6;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: 'Onest', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ===== Header ===== */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,14,23,0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+}
+.header-inner {
+  max-width: 1400px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px; gap: 16px;
+}
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 700; font-size: 20px; letter-spacing: -0.5px;
+  text-decoration: none; color: var(--text);
+}
+.logo-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), #ea580c);
+  display: grid; place-items: center;
+  font-size: 18px; font-weight: 700; color: white;
+}
+.header-actions { display: flex; align-items: center; gap: 10px; }
+
+/* ===== Buttons ===== */
+.btn {
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  font-family: var(--font); font-size: 13px; font-weight: 500;
+  cursor: pointer; border: 1px solid var(--border);
+  background: var(--bg-card); color: var(--text);
+  transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
+.btn-primary {
+  background: var(--accent); border-color: var(--accent); color: white;
+}
+.btn-primary:hover { background: #ea580c; }
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: rgba(239,68,68,0.1); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-ghost { border: none; background: none; color: var(--text-dim); }
+.btn-ghost:hover { color: var(--text); background: var(--bg-card); }
+
+/* ===== Stats Bar ===== */
+.stats-bar {
+  max-width: 1400px; margin: 0 auto; padding: 20px 24px 0;
+  display: flex; gap: 16px; flex-wrap: wrap;
+}
+.stat-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px;
+  flex: 1; min-width: 160px;
+}
+.stat-value {
+  font-size: 28px; font-weight: 700; letter-spacing: -1px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.stat-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ===== Search & Filters ===== */
+.search-section {
+  max-width: 1400px; margin: 0 auto; padding: 20px 24px;
+}
+.search-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.search-input {
+  flex: 1; min-width: 280px;
+  padding: 12px 16px 12px 44px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font); font-size: 15px;
+  transition: border-color 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='8' cy='8' r='5.5'/%3E%3Cline x1='12' y1='12' x2='16' y2='16'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 14px center;
+}
+.search-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.search-input::placeholder { color: var(--text-muted); }
+
+.filter-select {
+  padding: 12px 36px 12px 14px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font); font-size: 14px;
+  cursor: pointer; min-width: 180px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748b'%3E%3Cpath d='M6 8.5L1 3.5h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+.filter-select:focus { outline: none; border-color: var(--accent); }
+.filter-select option { background: var(--bg-card); color: var(--text); }
+
+.active-filters {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;
+}
+.filter-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; font-size: 12px;
+  background: var(--accent-glow); border: 1px solid rgba(249,115,22,0.3);
+  border-radius: 20px; color: var(--accent);
+}
+.filter-tag button {
+  background: none; border: none; color: var(--accent);
+  cursor: pointer; font-size: 14px; line-height: 1;
+}
+
+/* ===== Grid ===== */
+.grid-section {
+  max-width: 1400px; margin: 0 auto; padding: 0 24px 40px;
+}
+.grid-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px;
+}
+.grid-count { font-size: 14px; color: var(--text-muted); }
+
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+
+/* ===== Workflow Card ===== */
+.wf-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+  cursor: pointer; transition: all 0.2s;
+  display: flex; flex-direction: column; gap: 12px;
+  position: relative;
+}
+.wf-card:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.wf-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.wf-name {
+  font-size: 15px; font-weight: 600; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.wf-trigger {
+  font-size: 10px; font-weight: 600; padding: 3px 8px;
+  border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.wf-trigger[data-type="Webhook"] { background: rgba(6,182,212,0.15); color: var(--accent2); }
+.wf-trigger[data-type="Scheduled"] { background: rgba(139,92,246,0.15); color: var(--accent3); }
+.wf-trigger[data-type="Manual"] { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+.wf-trigger[data-type="Telegram"] { background: rgba(34,197,94,0.15); color: var(--success); }
+.wf-trigger[data-type="Chat"] { background: rgba(249,115,22,0.15); color: var(--accent); }
+.wf-trigger[data-type="Complex"] { background: rgba(249,115,22,0.1); color: var(--accent); }
+
+.wf-desc {
+  font-size: 13px; color: var(--text-dim); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.wf-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.wf-cat {
+  font-size: 11px; padding: 2px 8px;
+  background: rgba(255,255,255,0.05); border-radius: 4px;
+  color: var(--text-dim);
+}
+.wf-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted);
+}
+.wf-nodes-count { font-family: var(--mono); }
+
+/* ===== Modal ===== */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+  display: none; place-items: center;
+  padding: 20px;
+}
+.modal-overlay.active { display: grid; }
+.modal {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 16px; width: 100%; max-width: 700px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 20px 24px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--bg-surface); z-index: 1;
+}
+.modal-title { font-size: 18px; font-weight: 600; }
+.modal-close {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: none; border: 1px solid var(--border);
+  color: var(--text-dim); cursor: pointer; font-size: 18px;
+  display: grid; place-items: center; transition: all 0.2s;
+}
+.modal-close:hover { background: var(--bg-card); color: var(--text); }
+.modal-body { padding: 24px; }
+
+/* ===== Workflow Detail ===== */
+.detail-section { margin-bottom: 20px; }
+.detail-section h3 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-muted); margin-bottom: 8px;
+}
+.detail-nodes {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.detail-node {
+  font-family: var(--mono); font-size: 11px;
+  padding: 4px 8px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.detail-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.json-preview {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 16px;
+  font-family: var(--mono); font-size: 12px;
+  max-height: 300px; overflow: auto;
+  white-space: pre-wrap; word-break: break-all;
+  color: var(--text-dim);
+}
+
+/* ===== Import Modal ===== */
+.import-tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.import-tab {
+  padding: 10px 20px; font-size: 14px; font-weight: 500;
+  cursor: pointer; border: none; background: none;
+  color: var(--text-muted); border-bottom: 2px solid transparent;
+  font-family: var(--font); transition: all 0.2s;
+}
+.import-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.import-panel { display: none; }
+.import-panel.active { display: block; }
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-dim); }
+.form-input {
+  width: 100%; padding: 10px 14px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-family: var(--font); font-size: 14px;
+}
+.form-input:focus { outline: none; border-color: var(--accent); }
+textarea.form-input { min-height: 150px; font-family: var(--mono); font-size: 12px; resize: vertical; }
+.form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+/* ===== Auth Modal ===== */
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+
+/* ===== Pagination ===== */
+.pagination {
+  display: flex; justify-content: center; gap: 6px;
+  margin-top: 24px; flex-wrap: wrap;
+}
+.page-btn {
+  width: 36px; height: 36px; border-radius: var(--radius-sm);
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text-dim); cursor: pointer;
+  display: grid; place-items: center; font-size: 13px;
+  font-family: var(--font); transition: all 0.2s;
+}
+.page-btn:hover { border-color: var(--border-hover); }
+.page-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+.page-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* ===== Toast ===== */
+.toast-container {
+  position: fixed; bottom: 20px; right: 20px; z-index: 300;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  padding: 12px 20px; border-radius: var(--radius-sm);
+  font-size: 13px; animation: slideIn 0.3s ease;
+  border: 1px solid var(--border);
+}
+.toast-success { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: var(--success); }
+.toast-error { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: var(--danger); }
+.toast-info { background: rgba(6,182,212,0.15); border-color: rgba(6,182,212,0.3); color: var(--accent2); }
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ===== Loading ===== */
+.loading {
+  display: flex; justify-content: center; padding: 60px;
+}
+.spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== Empty State ===== */
+.empty-state {
+  text-align: center; padding: 60px 20px; color: var(--text-muted);
+}
+.empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+.empty-state h3 { font-size: 18px; color: var(--text-dim); margin-bottom: 8px; }
+
+/* ===== Repos Manager ===== */
+.repo-list { display: flex; flex-direction: column; gap: 10px; }
+.repo-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  gap: 10px; flex-wrap: wrap;
+}
+.repo-url { font-family: var(--mono); font-size: 12px; color: var(--accent2); word-break: break-all; flex: 1; }
+.repo-meta { font-size: 11px; color: var(--text-muted); }
+.repo-actions { display: flex; gap: 6px; }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .header-inner { height: 56px; }
+  .stats-bar { padding: 12px 16px 0; gap: 8px; }
+  .stat-card { padding: 12px 14px; }
+  .stat-value { font-size: 22px; }
+  .search-section { padding: 12px 16px; }
+  .grid-section { padding: 0 16px 24px; }
+  .workflow-grid { grid-template-columns: 1fr; }
+  .modal { max-width: 100%; margin: 10px; border-radius: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo">
+      <div class="logo-icon">n8</div>
+      <span>n8n Hub</span>
+    </a>
+    <div class="header-actions">
+      <button class="btn btn-ghost" onclick="openReposModal()" id="reposBtn" style="display:none">
+        ⚙ Репозиторії
+      </button>
+      <button class="btn btn-primary" onclick="openImportModal()" id="importBtn" style="display:none">
+        + Імпорт
+      </button>
+      <button class="btn" onclick="openAuthModal()" id="loginBtn">
+        🔒 Увійти
+      </button>
+      <button class="btn btn-ghost" onclick="doLogout()" id="logoutBtn" style="display:none">
+        Вийти
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ===== STATS ===== -->
+<div class="stats-bar">
+  <div class="stat-card">
+    <div class="stat-value" id="statTotal">0</div>
+    <div class="stat-label">Воркфлоу</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="statRepos">0</div>
+    <div class="stat-label">Репозиторіїв</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="statNodes">0</div>
+    <div class="stat-label">Унікальних нод</div>
+  </div>
+</div>
+
+<!-- ===== SEARCH ===== -->
+<div class="search-section">
+  <div class="search-row">
+    <input type="text" class="search-input" id="searchInput"
+           placeholder="Пошук воркфлоу..." autocomplete="off">
+    <select class="filter-select" id="categoryFilter" onchange="doSearch()">
+      <option value="">Всі категорії</option>
+      {% for cat in categories %}
+      <option value="{{ cat }}">{{ cat }}</option>
+      {% endfor %}
+    </select>
+    <select class="filter-select" id="nodeFilter" onchange="doSearch()">
+      <option value="">Всі ноди</option>
+      {% for node in nodes %}
+      <option value="{{ node }}">{{ node }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="active-filters" id="activeFilters"></div>
+</div>
+
+<!-- ===== GRID ===== -->
+<div class="grid-section">
+  <div class="grid-header">
+    <div class="grid-count" id="gridCount"></div>
+  </div>
+  <div id="gridContent">
+    <div class="loading"><div class="spinner"></div></div>
+  </div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- ===== WORKFLOW DETAIL MODAL ===== -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="detailTitle">Воркфлоу</div>
+      <button class="modal-close" onclick="closeModal('detailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- ===== IMPORT MODAL ===== -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Імпорт воркфлоу</div>
+      <button class="modal-close" onclick="closeModal('importModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="import-tabs">
+        <button class="import-tab active" onclick="switchTab(this, 'tabUrl')">За посиланням</button>
+        <button class="import-tab" onclick="switchTab(this, 'tabJson')">JSON</button>
+        <button class="import-tab" onclick="switchTab(this, 'tabFile')">Файл</button>
+      </div>
+
+      <div class="import-panel active" id="tabUrl">
+        <div class="form-group">
+          <label class="form-label">URL</label>
+          <input type="text" class="form-input" id="importUrl"
+                 placeholder="https://github.com/user/repo/tree/main/workflows">
+          <div class="form-hint">
+            Підтримується: GitHub репо/папка, GitHub JSON файл, n8n.io/workflows/ID
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="doImportUrl()" id="importUrlBtn">
+          Імпортувати
+        </button>
+      </div>
+
+      <div class="import-panel" id="tabJson">
+        <div class="form-group">
+          <label class="form-label">JSON воркфлоу</label>
+          <textarea class="form-input" id="importJson" placeholder='{"name":"...","nodes":[...]}'></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="doImportJson()">
+          Імпортувати
+        </button>
+      </div>
+
+      <div class="import-panel" id="tabFile">
+        <div class="form-group">
+          <label class="form-label">JSON файл (.json)</label>
+          <input type="file" class="form-input" id="importFile" accept=".json" style="padding:8px">
+        </div>
+        <button class="btn btn-primary" onclick="doImportFile()">
+          Завантажити
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AUTH MODAL ===== -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <div class="modal-title">Авторизація</div>
+      <button class="modal-close" onclick="closeModal('authModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="auth-form">
+        <div class="form-group">
+          <label class="form-label">Логін</label>
+          <input type="text" class="form-input" id="authUser" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Пароль</label>
+          <input type="password" class="form-input" id="authPass" autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="btn btn-primary" onclick="doLogin()" style="width:100%;justify-content:center;">
+          Увійти
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== REPOS MODAL ===== -->
+<div class="modal-overlay" id="reposModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">GitHub репозиторії</div>
+      <button class="modal-close" onclick="closeModal('reposModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <div style="display:flex;gap:8px">
+          <input type="text" class="form-input" id="newRepoUrl" placeholder="https://github.com/user/repo" style="flex:1">
+          <button class="btn btn-primary" onclick="doAddRepo()">Додати</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-sm" onclick="doSyncAll()">🔄 Синхронізувати все</button>
+      </div>
+      <div class="repo-list" id="repoList">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ===== State =====
+let authenticated = {{ 'true' if authenticated else 'false' }};
+let currentPage = 1;
+let searchTimeout = null;
+
+// ===== Init =====
+document.addEventListener('DOMContentLoaded', () => {
+  updateAuthUI();
+  loadStats();
+  doSearch();
+});
+
+// ===== Auth =====
+function updateAuthUI() {
+  document.getElementById('loginBtn').style.display = authenticated ? 'none' : '';
+  document.getElementById('logoutBtn').style.display = authenticated ? '' : 'none';
+  document.getElementById('importBtn').style.display = authenticated ? '' : 'none';
+  document.getElementById('reposBtn').style.display = authenticated ? '' : 'none';
+}
+
+async function doLogin() {
+  const user = document.getElementById('authUser').value;
+  const pass = document.getElementById('authPass').value;
+  const fd = new FormData();
+  fd.append('username', user);
+  fd.append('password', pass);
+  try {
+    const r = await fetch('/api/login', { method: 'POST', body: fd });
+    if (r.ok) {
+      authenticated = true;
+      updateAuthUI();
+      closeModal('authModal');
+      toast('Авторизовано!', 'success');
+    } else {
+      toast('Невірний логін або пароль', 'error');
+    }
+  } catch(e) { toast('Помилка з\'єднання', 'error'); }
+}
+
+async function doLogout() {
+  await fetch('/api/logout', { method: 'POST' });
+  authenticated = false;
+  updateAuthUI();
+  toast('Вихід виконано', 'info');
+}
+
+// ===== Search =====
+document.getElementById('searchInput').addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => { currentPage = 1; doSearch(); }, 300);
+});
+
+async function doSearch() {
+  const q = document.getElementById('searchInput').value;
+  const cat = document.getElementById('categoryFilter').value;
+  const node = document.getElementById('nodeFilter').value;
+  const params = new URLSearchParams({ q, category: cat, node, page: currentPage });
+
+  // Active filters display
+  const af = document.getElementById('activeFilters');
+  af.innerHTML = '';
+  if (cat) af.innerHTML += `<span class="filter-tag">${cat} <button onclick="clearFilter('category')">✕</button></span>`;
+  if (node) af.innerHTML += `<span class="filter-tag">${node} <button onclick="clearFilter('node')">✕</button></span>`;
+
+  document.getElementById('gridContent').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  try {
+    const r = await fetch('/api/search?' + params);
+    const data = await r.json();
+    renderGrid(data);
+    renderPagination(data);
+    document.getElementById('gridCount').textContent =
+      `Знайдено: ${data.total} воркфлоу`;
+  } catch(e) {
+    document.getElementById('gridContent').innerHTML =
+      '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h3>Помилка завантаження</h3></div>';
+  }
+}
+
+function clearFilter(type) {
+  if (type === 'category') document.getElementById('categoryFilter').value = '';
+  if (type === 'node') document.getElementById('nodeFilter').value = '';
+  doSearch();
+}
+
+function renderGrid(data) {
+  const container = document.getElementById('gridContent');
+  if (!data.workflows.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <h3>Нічого не знайдено</h3>
+        <p>Спробуйте інший пошуковий запит або ${authenticated ? 'імпортуйте воркфлоу' : 'увійдіть щоб імпортувати'}</p>
+      </div>`;
+    return;
+  }
+  container.innerHTML = '<div class="workflow-grid">' +
+    data.workflows.map(wf => `
+      <div class="wf-card" onclick="openDetail(${wf.id})">
+        <div class="wf-card-header">
+          <div class="wf-name">${esc(wf.name)}</div>
+          <span class="wf-trigger" data-type="${wf.trigger_type}">${wf.trigger_type}</span>
+        </div>
+        <div class="wf-desc">${esc(wf.description)}</div>
+        <div class="wf-meta">
+          ${(wf.categories || []).map(c => `<span class="wf-cat">${esc(c)}</span>`).join('')}
+        </div>
+        <div class="wf-footer">
+          <span class="wf-nodes-count">${wf.node_count} нод</span>
+          <span>${formatDate(wf.added_at)}</span>
+        </div>
+      </div>
+    `).join('') + '</div>';
+}
+
+function renderPagination(data) {
+  const container = document.getElementById('pagination');
+  if (data.pages <= 1) { container.innerHTML = ''; return; }
+  let html = '';
+  html += `<button class="page-btn" onclick="goPage(${data.page-1})" ${data.page<=1?'disabled':''}>‹</button>`;
+  const start = Math.max(1, data.page - 3);
+  const end = Math.min(data.pages, data.page + 3);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i===data.page?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  html += `<button class="page-btn" onclick="goPage(${data.page+1})" ${data.page>=data.pages?'disabled':''}>›</button>`;
+  container.innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; doSearch(); window.scrollTo({ top: 300, behavior: 'smooth' }); }
+
+// ===== Stats =====
+async function loadStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const s = await r.json();
+    document.getElementById('statTotal').textContent = s.total_workflows;
+    document.getElementById('statRepos').textContent = s.total_repos;
+    document.getElementById('statNodes').textContent = s.unique_nodes;
+  } catch(e) {}
+}
+
+// ===== Workflow Detail =====
+async function openDetail(id) {
+  openModal('detailModal');
+  document.getElementById('detailBody').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch(`/api/workflow/${id}`);
+    const wf = await r.json();
+    document.getElementById('detailTitle').textContent = wf.name;
+    document.getElementById('detailBody').innerHTML = `
+      <div class="detail-section">
+        <h3>Опис</h3>
+        <p style="color:var(--text-dim);font-size:14px">${esc(wf.description) || 'Немає опису'}</p>
+      </div>
+      <div class="detail-section">
+        <h3>Категорії</h3>
+        <div class="detail-nodes">
+          ${(wf.categories||[]).map(c => `<span class="detail-node" style="color:var(--accent)">${esc(c)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="detail-section">
+        <h3>Ноди (${wf.node_count})</h3>
+        <div class="detail-nodes">
+          ${(wf.nodes||[]).map(n => `<span class="detail-node">${esc(n)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="detail-section">
+        <h3>Тип тригера</h3>
+        <span class="wf-trigger" data-type="${wf.trigger_type}" style="display:inline-block">${wf.trigger_type}</span>
+      </div>
+      ${wf.source_url ? `<div class="detail-section"><h3>Джерело</h3><a href="${esc(wf.source_url)}" target="_blank" style="color:var(--accent2);font-size:13px;word-break:break-all">${esc(wf.source_url)}</a></div>` : ''}
+      <div class="detail-section">
+        <h3>JSON</h3>
+        <div class="json-preview">${esc(wf.json_content?.substring(0, 1500))}${wf.json_content?.length > 1500 ? '\n...' : ''}</div>
+      </div>
+      <div class="detail-actions">
+        <button class="btn btn-primary" onclick="downloadJson(${wf.id}, '${esc(wf.name)}')">
+          ⬇ Завантажити JSON
+        </button>
+        <button class="btn" onclick="copyJson(${wf.id})">
+          📋 Копіювати JSON
+        </button>
+        ${authenticated ? `<button class="btn btn-danger" onclick="deleteWorkflow(${wf.id})">🗑 Видалити</button>` : ''}
+      </div>
+    `;
+  } catch(e) {
+    document.getElementById('detailBody').innerHTML = '<p style="color:var(--danger)">Помилка завантаження</p>';
+  }
+}
+
+async function downloadJson(id, name) {
+  const r = await fetch(`/api/workflow/${id}/json`);
+  const blob = await r.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name.replace(/[^a-zA-Zа-яА-ЯіІїЇєЄґҐ0-9\-_ ]/g, '') + '.json';
+  a.click();
+}
+
+async function copyJson(id) {
+  const r = await fetch(`/api/workflow/${id}/json`);
+  const text = await r.text();
+  await navigator.clipboard.writeText(text);
+  toast('JSON скопійовано!', 'success');
+}
+
+async function deleteWorkflow(id) {
+  if (!confirm('Видалити цей воркфлоу?')) return;
+  await fetch(`/api/workflow/${id}`, { method: 'DELETE' });
+  closeModal('detailModal');
+  toast('Видалено', 'info');
+  doSearch();
+  loadStats();
+}
+
+// ===== Import =====
+async function doImportUrl() {
+  const url = document.getElementById('importUrl').value.trim();
+  if (!url) return toast('Вставте URL', 'error');
+  const btn = document.getElementById('importUrlBtn');
+  btn.disabled = true; btn.textContent = 'Імпортую...';
+  try {
+    const fd = new FormData(); fd.append('url', url);
+    const r = await fetch('/api/import/url', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      if (data.imported !== undefined) {
+        toast(`Імпортовано: ${data.imported}, дублікатів: ${data.duplicates || 0}`, 'success');
+      } else {
+        toast(`Імпортовано: ${data.name}`, 'success');
+      }
+      doSearch(); loadStats(); reloadFilters();
+    } else {
+      toast(data.message || 'Помилка імпорту', 'error');
+    }
+  } catch(e) { toast('Помилка: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Імпортувати';
+}
+
+async function doImportJson() {
+  const json = document.getElementById('importJson').value.trim();
+  if (!json) return toast('Вставте JSON', 'error');
+  const fd = new FormData(); fd.append('json_text', json);
+  try {
+    const r = await fetch('/api/import/json', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      toast(`Імпортовано: ${data.name}`, 'success');
+      doSearch(); loadStats(); reloadFilters();
+    } else { toast(data.message || 'Дублікат', 'info'); }
+  } catch(e) { toast('Помилка: ' + e.message, 'error'); }
+}
+
+async function doImportFile() {
+  const file = document.getElementById('importFile').files[0];
+  if (!file) return toast('Оберіть файл', 'error');
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const r = await fetch('/api/import/file', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      toast(`Імпортовано: ${data.name}`, 'success');
+      doSearch(); loadStats(); reloadFilters();
+    } else { toast(data.message || 'Дублікат', 'info'); }
+  } catch(e) { toast('Помилка: ' + e.message, 'error'); }
+}
+
+// ===== Repos =====
+async function loadRepos() {
+  try {
+    const r = await fetch('/api/repos');
+    const repos = await r.json();
+    const el = document.getElementById('repoList');
+    if (!repos.length) { el.innerHTML = '<p style="color:var(--text-muted);text-align:center">Немає репозиторіїв</p>'; return; }
+    el.innerHTML = repos.map(repo => `
+      <div class="repo-item">
+        <div>
+          <div class="repo-url">${esc(repo.repo_url)}</div>
+          <div class="repo-meta">
+            Воркфлоу: ${repo.workflow_count || 0} · 
+            Синхр: ${repo.last_synced ? formatDate(repo.last_synced) : 'ніколи'}
+          </div>
+        </div>
+        <div class="repo-actions">
+          <button class="btn btn-sm" onclick="doSyncRepo(${repo.id})">🔄</button>
+          <button class="btn btn-sm btn-danger" onclick="doDeleteRepo(${repo.id})">✕</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { toast('Помилка', 'error'); }
+}
+
+async function doAddRepo() {
+  const url = document.getElementById('newRepoUrl').value.trim();
+  if (!url) return;
+  toast('Імпортую репозиторій...', 'info');
+  const fd = new FormData(); fd.append('url', url);
+  const r = await fetch('/api/import/url', { method: 'POST', body: fd });
+  const data = await r.json();
+  if (data.imported !== undefined) {
+    toast(`Імпортовано: ${data.imported}`, 'success');
+  }
+  document.getElementById('newRepoUrl').value = '';
+  loadRepos(); loadStats(); doSearch(); reloadFilters();
+}
+
+async function doSyncRepo(id) {
+  toast('Синхронізую...', 'info');
+  const r = await fetch(`/api/repos/sync/${id}`, { method: 'POST' });
+  const data = await r.json();
+  toast(`Синхр: +${data.imported || 0} нових`, 'success');
+  loadRepos(); loadStats(); doSearch();
+}
+
+async function doSyncAll() {
+  toast('Синхронізую всі репо...', 'info');
+  await fetch('/api/repos/sync-all', { method: 'POST' });
+  toast('Готово!', 'success');
+  loadRepos(); loadStats(); doSearch();
+}
+
+async function doDeleteRepo(id) {
+  if (!confirm('Видалити репозиторій та його воркфлоу?')) return;
+  await fetch(`/api/repos/${id}`, { method: 'DELETE' });
+  toast('Видалено', 'info');
+  loadRepos(); loadStats(); doSearch();
+}
+
+// ===== Filters reload =====
+async function reloadFilters() {
+  try {
+    const r = await fetch('/api/filters');
+    const data = await r.json();
+    const catSel = document.getElementById('categoryFilter');
+    const val = catSel.value;
+    catSel.innerHTML = '<option value="">Всі категорії</option>' +
+      data.categories.map(c => `<option value="${c}" ${c===val?'selected':''}>${c}</option>`).join('');
+
+    const nodeSel = document.getElementById('nodeFilter');
+    const nval = nodeSel.value;
+    nodeSel.innerHTML = '<option value="">Всі ноди</option>' +
+      data.nodes.map(n => `<option value="${n}" ${n===nval?'selected':''}>${n}</option>`).join('');
+  } catch(e) {}
+}
+
+// ===== Modal helpers =====
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function openAuthModal() { openModal('authModal'); document.getElementById('authUser').focus(); }
+function openImportModal() { openModal('importModal'); }
+function openReposModal() { openModal('reposModal'); loadRepos(); }
+
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('active'); });
+});
+
+function switchTab(btn, panelId) {
+  btn.parentElement.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  btn.closest('.modal-body').querySelectorAll('.import-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(panelId).classList.add('active');
+}
+
+// ===== Utils =====
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+function formatDate(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  return d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+</script>
+</body>
+</html>

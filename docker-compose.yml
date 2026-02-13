@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  n8n-hub:
+    build: .
+    container_name: n8n-hub
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - n8n_hub_data:/data
+      - ./data/workflows:/app/data/workflows:ro
+    environment:
+      - DB_PATH=/data/workflows.db
+      - LOCAL_WORKFLOWS_DIR=/app/data/workflows
+      - ADMIN_USER=admin
+      - ADMIN_PASS=${ADMIN_PASS:-changeme}
+      - SECRET_KEY=${SECRET_KEY:-your-random-secret-key-here}
+      - INITIAL_REPOS=
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - SYNC_INTERVAL_HOURS=24
+
+volumes:
+  n8n_hub_data:
