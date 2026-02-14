@@ -274,6 +274,39 @@ async def _get_default_branch(client: httpx.AsyncClient, owner: str, repo: str) 
     return "main"
 
 
+async def _list_github_dir_contents(owner: str, repo_name: str, branch: str, path: str) -> list:
+    """List JSON files using GitHub Contents API (no truncation issues)."""
+    json_files = []
+    page_url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/{path}?ref={branch}"
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.get(page_url, headers=_github_headers())
+
+        if resp.status_code == 403:
+            logger.warning("Rate limit on contents API, waiting 60s...")
+            await asyncio.sleep(60)
+            resp = await client.get(page_url, headers=_github_headers())
+
+        if resp.status_code != 200:
+            logger.error(f"Contents API returned {resp.status_code} for {path}")
+            return []
+
+        items = resp.json()
+        if not isinstance(items, list):
+            return []
+
+        for item in items:
+            if item.get("type") == "file" and item["name"].endswith(".json"):
+                json_files.append(item["path"])
+            elif item.get("type") == "dir":
+                # Recursively list subdirectories
+                sub_files = await _list_github_dir_contents(owner, repo_name, branch, item["path"])
+                json_files.extend(sub_files)
+                await asyncio.sleep(0.1)  # Rate limit
+
+    return json_files
+
+
 async def _import_github_dir(url: str) -> dict:
     """Import all JSON files from a GitHub directory using API."""
     # Parse: github.com/owner/repo/tree/branch/path
@@ -284,7 +317,7 @@ async def _import_github_dir(url: str) -> dict:
     owner, repo_name, tree_part = match.groups()
     repo_url = f"https://github.com/{owner}/{repo_name}"
 
-    # Get tree listing with a short-lived client
+    # Determine branch and path
     async with httpx.AsyncClient(timeout=60) as client:
         if tree_part:
             parts = tree_part.split("/")
@@ -294,27 +327,43 @@ async def _import_github_dir(url: str) -> dict:
             branch = await _get_default_branch(client, owner, repo_name)
             path = ""
 
+    # Try git/trees first (fast, single request)
+    json_files = []
+    async with httpx.AsyncClient(timeout=60) as client:
         api_url = f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/{branch}?recursive=1"
         resp = await client.get(api_url, headers=_github_headers())
-        if resp.status_code != 200:
-            return {"status": "error", "message": f"GitHub API: {resp.status_code}"}
+        if resp.status_code == 200:
+            data = resp.json()
+            truncated = data.get("truncated", False)
+            tree = data.get("tree", [])
 
-        tree = resp.json().get("tree", [])
+            if not truncated:
+                for item in tree:
+                    if item["type"] == "blob" and item["path"].endswith(".json"):
+                        if path:
+                            if item["path"].startswith(path + "/") or item["path"] == path:
+                                json_files.append(item["path"])
+                        else:
+                            if "/workflows/" in item["path"] or item["path"].startswith("workflows/"):
+                                json_files.append(item["path"])
+                            elif item["path"].count("/") <= 1:
+                                json_files.append(item["path"])
 
-    json_files = []
-    for item in tree:
-        if item["type"] == "blob" and item["path"].endswith(".json"):
-            if path:
-                if item["path"].startswith(path + "/") or item["path"] == path:
-                    json_files.append(item["path"])
+                if not json_files:
+                    json_files = [i["path"] for i in tree if i["type"] == "blob" and i["path"].endswith(".json")]
             else:
-                if "/workflows/" in item["path"] or item["path"].startswith("workflows/"):
-                    json_files.append(item["path"])
-                elif item["path"].count("/") <= 1:
-                    json_files.append(item["path"])
+                logger.warning(f"Git tree truncated for {owner}/{repo_name}, falling back to Contents API")
 
+    # Fallback: Contents API (slower but no truncation)
     if not json_files:
-        json_files = [i["path"] for i in tree if i["type"] == "blob" and i["path"].endswith(".json")]
+        target_path = path or "workflows"
+        logger.info(f"Using Contents API to list files in {target_path}...")
+        json_files = await _list_github_dir_contents(owner, repo_name, branch, target_path)
+
+        # If still empty, try repo root
+        if not json_files and target_path != "":
+            logger.info("Trying repo root with Contents API...")
+            json_files = await _list_github_dir_contents(owner, repo_name, branch, "")
 
     logger.info(f"Found {len(json_files)} JSON files to import from {owner}/{repo_name}")
 
