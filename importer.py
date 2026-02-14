@@ -4,6 +4,9 @@ import os
 import re
 import asyncio
 import logging
+import zipfile
+import io
+import tempfile
 from pathlib import Path
 
 import httpx
@@ -274,42 +277,10 @@ async def _get_default_branch(client: httpx.AsyncClient, owner: str, repo: str) 
     return "main"
 
 
-async def _list_github_dir_contents(owner: str, repo_name: str, branch: str, path: str) -> list:
-    """List JSON files using GitHub Contents API (no truncation issues)."""
-    json_files = []
-    page_url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/{path}?ref={branch}"
-
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.get(page_url, headers=_github_headers())
-
-        if resp.status_code == 403:
-            logger.warning("Rate limit on contents API, waiting 60s...")
-            await asyncio.sleep(60)
-            resp = await client.get(page_url, headers=_github_headers())
-
-        if resp.status_code != 200:
-            logger.error(f"Contents API returned {resp.status_code} for {path}")
-            return []
-
-        items = resp.json()
-        if not isinstance(items, list):
-            return []
-
-        for item in items:
-            if item.get("type") == "file" and item["name"].endswith(".json"):
-                json_files.append(item["path"])
-            elif item.get("type") == "dir":
-                # Recursively list subdirectories
-                sub_files = await _list_github_dir_contents(owner, repo_name, branch, item["path"])
-                json_files.extend(sub_files)
-                await asyncio.sleep(0.1)  # Rate limit
-
-    return json_files
-
-
 async def _import_github_dir(url: str) -> dict:
-    """Import all JSON files from a GitHub directory using API."""
-    # Parse: github.com/owner/repo/tree/branch/path
+    """Import all JSON files from a GitHub repo by downloading ZIP archive.
+    This avoids git/trees truncation and Contents API limits for large repos.
+    """
     match = re.match(r"https?://github\.com/([\w.\-]+)/([\w.\-]+)(?:/tree/([^?#]+))?", url)
     if not match:
         return {"status": "error", "message": "Невірний GitHub URL"}
@@ -317,112 +288,64 @@ async def _import_github_dir(url: str) -> dict:
     owner, repo_name, tree_part = match.groups()
     repo_url = f"https://github.com/{owner}/{repo_name}"
 
-    # Determine branch and path
+    # Determine branch and path filter
     async with httpx.AsyncClient(timeout=60) as client:
         if tree_part:
             parts = tree_part.split("/")
             branch = parts[0]
-            path = "/".join(parts[1:]) if len(parts) > 1 else ""
+            path_filter = "/".join(parts[1:]) if len(parts) > 1 else ""
         else:
             branch = await _get_default_branch(client, owner, repo_name)
-            path = ""
+            path_filter = ""
 
-    # Try git/trees first (fast, single request)
-    json_files = []
-    async with httpx.AsyncClient(timeout=60) as client:
-        api_url = f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/{branch}?recursive=1"
-        resp = await client.get(api_url, headers=_github_headers())
-        if resp.status_code == 200:
-            data = resp.json()
-            truncated = data.get("truncated", False)
-            tree = data.get("tree", [])
+    # Download ZIP archive (single request, no truncation)
+    zip_url = f"https://github.com/{owner}/{repo_name}/archive/refs/heads/{branch}.zip"
+    logger.info(f"Downloading ZIP archive from {zip_url}...")
 
-            if not truncated:
-                for item in tree:
-                    if item["type"] == "blob" and item["path"].endswith(".json"):
-                        if path:
-                            if item["path"].startswith(path + "/") or item["path"] == path:
-                                json_files.append(item["path"])
-                        else:
-                            if "/workflows/" in item["path"] or item["path"].startswith("workflows/"):
-                                json_files.append(item["path"])
-                            elif item["path"].count("/") <= 1:
-                                json_files.append(item["path"])
+    async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
+        resp = await client.get(zip_url)
+        if resp.status_code != 200:
+            return {"status": "error", "message": f"ZIP download failed: HTTP {resp.status_code}"}
 
-                if not json_files:
-                    json_files = [i["path"] for i in tree if i["type"] == "blob" and i["path"].endswith(".json")]
-            else:
-                logger.warning(f"Git tree truncated for {owner}/{repo_name}, falling back to Contents API")
+    logger.info(f"ZIP downloaded: {len(resp.content) / 1024 / 1024:.1f} MB. Extracting JSON files...")
 
-    # Fallback: Contents API (slower but no truncation)
-    if not json_files:
-        target_path = path or "workflows"
-        logger.info(f"Using Contents API to list files in {target_path}...")
-        json_files = await _list_github_dir_contents(owner, repo_name, branch, target_path)
-
-        # If still empty, try repo root
-        if not json_files and target_path != "":
-            logger.info("Trying repo root with Contents API...")
-            json_files = await _list_github_dir_contents(owner, repo_name, branch, "")
-
-    logger.info(f"Found {len(json_files)} JSON files to import from {owner}/{repo_name}")
-
+    # Extract JSON files from ZIP
     imported = 0
     duplicates = 0
     errors = 0
     batch = []
-    BATCH_SIZE = 100
+    BATCH_SIZE = 500
+    total_json = 0
 
-    # Process files in chunks with fresh connections
-    for i, fpath in enumerate(json_files):
-        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/{fpath}"
+    # ZIP root folder is typically "repo_name-branch/"
+    zip_prefix = f"{repo_name}-{branch}/"
+    target_prefix = zip_prefix + (path_filter + "/" if path_filter else "")
 
-        # Retry up to 3 times
-        content = None
-        for attempt in range(3):
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        json_names = [n for n in zf.namelist() if n.endswith(".json") and n.startswith(target_prefix)]
+        total_json = len(json_names)
+        logger.info(f"Found {total_json} JSON files in ZIP archive")
+
+        for i, name in enumerate(json_names):
             try:
-                async with httpx.AsyncClient(timeout=30) as client:
-                    resp = await client.get(raw_url, headers=_github_headers())
-
-                if resp.status_code == 403:
-                    logger.warning("GitHub rate limit hit, waiting 60s...")
-                    await asyncio.sleep(60)
-                    continue
-
-                if resp.status_code == 200:
-                    content = resp.text
-                    break
-                else:
-                    logger.warning(f"HTTP {resp.status_code} for {fpath}")
-                    break
-            except Exception as e:
-                logger.warning(f"Attempt {attempt + 1}/3 failed for {fpath}: {e}")
-                await asyncio.sleep(2)
-
-        if content:
-            try:
+                content = zf.read(name).decode("utf-8")
                 parsed = parse_workflow_json(content)
-                parsed["source_url"] = raw_url
+                # Build a raw URL for reference
+                rel_path = name[len(zip_prefix):]
+                parsed["source_url"] = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/{rel_path}"
                 parsed["source_repo"] = repo_url
                 batch.append(parsed)
             except Exception as e:
-                logger.warning(f"Parse error {fpath}: {e}")
+                logger.warning(f"Error parsing {name}: {e}")
                 errors += 1
-        else:
-            errors += 1
 
-        # Flush batch to DB
-        if len(batch) >= BATCH_SIZE:
-            new, dups = insert_workflows_batch(batch)
-            imported += new
-            duplicates += dups
-            batch = []
-            logger.info(f"GitHub import progress: {i + 1}/{len(json_files)} "
-                        f"(+{imported} new, {duplicates} dup, {errors} err)")
-
-        # Small delay every 10 requests
-        if (i + 1) % 10 == 0:
-            await asyncio.sleep(0.1)
+            if len(batch) >= BATCH_SIZE:
+                new, dups = insert_workflows_batch(batch)
+                imported += new
+                duplicates += dups
+                batch = []
+                logger.info(f"Import progress: {i + 1}/{total_json} "
+                            f"(+{imported} new, {duplicates} dup, {errors} err)")
 
     # Flush remaining
     if batch:
@@ -430,7 +353,7 @@ async def _import_github_dir(url: str) -> dict:
         imported += new
         duplicates += dups
 
-    logger.info(f"GitHub import complete: {imported} new, {duplicates} dup, {errors} err out of {len(json_files)}")
+    logger.info(f"GitHub import complete: {imported} new, {duplicates} dup, {errors} err out of {total_json}")
 
     # Register repo for sync
     add_github_repo(repo_url)
@@ -441,7 +364,7 @@ async def _import_github_dir(url: str) -> dict:
         "imported": imported,
         "duplicates": duplicates,
         "errors": errors,
-        "total_files": len(json_files),
+        "total_files": total_json,
     }
 
 
