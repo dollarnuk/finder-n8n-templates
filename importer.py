@@ -284,11 +284,9 @@ async def _import_github_dir(url: str) -> dict:
     owner, repo_name, tree_part = match.groups()
     repo_url = f"https://github.com/{owner}/{repo_name}"
 
+    # Get tree listing with a short-lived client
     async with httpx.AsyncClient(timeout=60) as client:
-        # Determine branch and path
         if tree_part:
-            # Try to split tree_part into branch/path
-            # First try: the whole thing is a branch (no path)
             parts = tree_part.split("/")
             branch = parts[0]
             path = "/".join(parts[1:]) if len(parts) > 1 else ""
@@ -297,75 +295,105 @@ async def _import_github_dir(url: str) -> dict:
             path = ""
 
         api_url = f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/{branch}?recursive=1"
-
         resp = await client.get(api_url, headers=_github_headers())
         if resp.status_code != 200:
             return {"status": "error", "message": f"GitHub API: {resp.status_code}"}
 
         tree = resp.json().get("tree", [])
-        json_files = []
-        for item in tree:
-            if item["type"] == "blob" and item["path"].endswith(".json"):
-                if path:
-                    if item["path"].startswith(path + "/") or item["path"] == path:
-                        json_files.append(item["path"])
-                else:
-                    if "/workflows/" in item["path"] or item["path"].startswith("workflows/"):
-                        json_files.append(item["path"])
-                    elif item["path"].count("/") <= 1:
-                        json_files.append(item["path"])
 
-        if not json_files:
-            json_files = [i["path"] for i in tree if i["type"] == "blob" and i["path"].endswith(".json")]
+    json_files = []
+    for item in tree:
+        if item["type"] == "blob" and item["path"].endswith(".json"):
+            if path:
+                if item["path"].startswith(path + "/") or item["path"] == path:
+                    json_files.append(item["path"])
+            else:
+                if "/workflows/" in item["path"] or item["path"].startswith("workflows/"):
+                    json_files.append(item["path"])
+                elif item["path"].count("/") <= 1:
+                    json_files.append(item["path"])
 
-        imported = 0
-        duplicates = 0
-        errors = 0
+    if not json_files:
+        json_files = [i["path"] for i in tree if i["type"] == "blob" and i["path"].endswith(".json")]
 
-        for i, fpath in enumerate(json_files):
-            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/{fpath}"
+    logger.info(f"Found {len(json_files)} JSON files to import from {owner}/{repo_name}")
+
+    imported = 0
+    duplicates = 0
+    errors = 0
+    batch = []
+    BATCH_SIZE = 100
+
+    # Process files in chunks with fresh connections
+    for i, fpath in enumerate(json_files):
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/{fpath}"
+
+        # Retry up to 3 times
+        content = None
+        for attempt in range(3):
             try:
-                resp = await client.get(raw_url, timeout=15, headers=_github_headers())
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.get(raw_url, headers=_github_headers())
 
-                # Handle rate limiting
                 if resp.status_code == 403:
                     logger.warning("GitHub rate limit hit, waiting 60s...")
                     await asyncio.sleep(60)
-                    resp = await client.get(raw_url, timeout=15, headers=_github_headers())
+                    continue
 
                 if resp.status_code == 200:
-                    result = await import_from_json(resp.text, source_url=raw_url, source_repo=repo_url)
-                    if result["status"] == "ok":
-                        imported += 1
-                    elif result["status"] == "duplicate":
-                        duplicates += 1
-                    else:
-                        errors += 1
+                    content = resp.text
+                    break
                 else:
-                    errors += 1
+                    logger.warning(f"HTTP {resp.status_code} for {fpath}")
+                    break
             except Exception as e:
-                logger.warning(f"Error importing {fpath}: {e}")
+                logger.warning(f"Attempt {attempt + 1}/3 failed for {fpath}: {e}")
+                await asyncio.sleep(2)
+
+        if content:
+            try:
+                parsed = parse_workflow_json(content)
+                parsed["source_url"] = raw_url
+                parsed["source_repo"] = repo_url
+                batch.append(parsed)
+            except Exception as e:
+                logger.warning(f"Parse error {fpath}: {e}")
                 errors += 1
+        else:
+            errors += 1
 
-            # Rate limiting: small delay between requests
-            if (i + 1) % 10 == 0:
-                await asyncio.sleep(0.1)
+        # Flush batch to DB
+        if len(batch) >= BATCH_SIZE:
+            new, dups = insert_workflows_batch(batch)
+            imported += new
+            duplicates += dups
+            batch = []
+            logger.info(f"GitHub import progress: {i + 1}/{len(json_files)} "
+                        f"(+{imported} new, {duplicates} dup, {errors} err)")
 
-            if (i + 1) % 100 == 0:
-                logger.info(f"GitHub import progress: {i + 1}/{len(json_files)} "
-                            f"(+{imported} new, {duplicates} dup, {errors} err)")
+        # Small delay every 10 requests
+        if (i + 1) % 10 == 0:
+            await asyncio.sleep(0.1)
 
-        # Register repo for sync
-        add_github_repo(repo_url)
-        update_repo_sync(repo_url, imported)
+    # Flush remaining
+    if batch:
+        new, dups = insert_workflows_batch(batch)
+        imported += new
+        duplicates += dups
 
-        return {
-            "status": "ok",
-            "imported": imported,
-            "duplicates": duplicates,
-            "errors": errors,
-            "total_files": len(json_files),
-        }
+    logger.info(f"GitHub import complete: {imported} new, {duplicates} dup, {errors} err out of {len(json_files)}")
+
+    # Register repo for sync
+    add_github_repo(repo_url)
+    update_repo_sync(repo_url, imported)
+
+    return {
+        "status": "ok",
+        "imported": imported,
+        "duplicates": duplicates,
+        "errors": errors,
+        "total_files": len(json_files),
+    }
 
 
 async def _import_n8n_io(url: str) -> dict:
