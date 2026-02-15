@@ -1696,7 +1696,7 @@
       </div>
       ` : `
       <div class="detail-section">
-        ${authenticated ? `<button class="btn btn-sm" onclick="analyzeWorkflow(${wf.id})">🤖 Аналізувати AI</button>` : '<p style="color:var(--text-muted);font-size:12px">AI-аналіз ще не проведено</p>'}
+        ${is_admin ? `<button class="btn btn-sm" onclick="analyzeWorkflow(${wf.id})">🤖 Аналізувати AI</button>` : '<p style="color:var(--text-muted);font-size:12px">AI-аналіз ще не проведено</p>'}
       </div>
       `}
       <div class="detail-section">
@@ -1734,7 +1734,7 @@
         <button class="btn" onclick="copyImportUrl(${wf.id})">
           🔗 URL для n8n
         </button>
-        ${authenticated ? `<button class="btn btn-danger" onclick="deleteWorkflow(${wf.id})">🗑 Видалити</button>` : ''}
+        ${is_admin ? `<button class="btn btn-danger" onclick="deleteWorkflow(${wf.id})">🗑 Видалити</button>` : ''}
       </div>
     `;
       } catch (e) {
