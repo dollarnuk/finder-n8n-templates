@@ -57,6 +57,7 @@ def generate_wfp_signature(data_list):
         hashlib.md5
     ).hexdigest()
 
+oauth = OAuth()
 oauth.register(
     name='google',
     client_id=GOOGLE_CLIENT_ID,
