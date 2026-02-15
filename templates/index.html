@@ -2022,12 +2022,12 @@
             // document.getElementById('adminReposBtn').style.display = 'inline-flex'; // This element doesn't exist in the current HTML
           }
 
-          // Show Pro badge if active
-          if (data.usage && data.usage.sub_status === 'active') {
+          // Show Pro badge if active or admin
+          if (data.is_admin || (data.usage && data.usage.sub_status === 'active')) {
             const badge = document.createElement('span');
             badge.className = 'status-badge status-ok';
             badge.style.marginLeft = '5px';
-            badge.textContent = i18n[currentLang].proBadge;
+            badge.textContent = data.is_admin ? (currentLang === 'uk' ? 'АДМІН' : 'ADMIN') : i18n[currentLang].proBadge;
             document.getElementById('userName').appendChild(badge);
             document.getElementById('aiSearchLimit').textContent = i18n[currentLang].proUnlimited;
           } else if (data.usage) {

@@ -584,9 +584,10 @@ async def api_chat_search(request: Request, body: dict = None):
         raise HTTPException(status_code=401, detail="Будь ласка, увійдіть, щоб скористатися AI-чатом")
     
     user_id = user.get("id")
+    usage = None
+    
     # Bypass limits for admin
     if is_admin(request):
-        # Admin has no limits and doesn't need usage check if user_id is missing
         pass
     else:
         if not user_id:
@@ -608,8 +609,8 @@ async def api_chat_search(request: Request, body: dict = None):
     
     result = await perform_ai_search(query)
     
-    # Increment usage on successful search
-    if not is_admin(request) and usage["sub_status"] != "active":
+    # Increment usage on successful search (only for free users)
+    if not is_admin(request) and usage and usage["sub_status"] != "active":
         increment_user_usage(user_id)
         
     return JSONResponse(result)
