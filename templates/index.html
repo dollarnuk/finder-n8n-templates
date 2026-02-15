@@ -2042,8 +2042,10 @@
 
         const hasEn = !!wf.ai_summary_en;
         const summary = currentLang === 'en' ? (hasEn ? wf.ai_summary_en : `<span style="color:var(--accent2)">⚠️ Analysis pending for English version.</span>`) : (wf.ai_summary || wf.description);
-        const description = wf.description; // Usually we show summary, but keep description as data
-        const useCases = currentLang === 'en' ? (hasEn ? JSON.parse(wf.ai_use_cases_en || '[]') : []) : JSON.parse(wf.ai_use_cases || '[]');
+        const description = wf.description;
+
+        // Use cases are now pre-parsed by the backend
+        const useCases = currentLang === 'en' ? (wf.ai_use_cases_en || []) : (wf.ai_use_cases || []);
         const integrationsSummary = currentLang === 'en' ? (hasEn ? wf.ai_integrations_summary_en : '') : wf.ai_integrations_summary;
         const targetAudience = currentLang === 'en' ? (hasEn ? wf.ai_target_audience_en : '') : wf.ai_target_audience;
 

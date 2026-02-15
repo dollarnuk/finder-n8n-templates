@@ -215,9 +215,15 @@ async def api_search(q: str = "", category: str = "", node: str = "", page: int 
     results = search_workflows(query=q, category=category, node=node, page=page,
                                sort=sort, min_score=min_score)
     for wf in results["workflows"]:
-        wf["nodes"] = json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"]
-        wf["categories"] = json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"]
-        wf["ai_use_cases"] = json.loads(wf.get("ai_use_cases")) if isinstance(wf.get("ai_use_cases"), str) else wf.get("ai_use_cases", [])
+        for key in ["nodes", "categories", "ai_tags", "ai_use_cases", "ai_use_cases_en"]:
+            val = wf.get(key)
+            if isinstance(val, str) and val.strip():
+                try:
+                    wf[key] = json.loads(val)
+                except:
+                    wf[key] = [] if "use_cases" in key or "tags" in key or "nodes" in key or "categories" in key else val
+            elif val is None and (key.endswith("nodes") or key.endswith("categories") or "use_cases" in key or "tags" in key):
+                wf[key] = []
     return JSONResponse(results)
 
 
@@ -226,10 +232,15 @@ async def api_get_workflow(wf_id: int):
     wf = get_workflow(wf_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Воркфлоу не знайдено")
-    wf["nodes"] = json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"]
-    wf["categories"] = json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"]
-    wf["ai_tags"] = json.loads(wf["ai_tags"]) if isinstance(wf.get("ai_tags"), str) else wf.get("ai_tags", [])
-    wf["ai_use_cases"] = json.loads(wf.get("ai_use_cases")) if isinstance(wf.get("ai_use_cases"), str) else wf.get("ai_use_cases", [])
+    for key in ["nodes", "categories", "ai_tags", "ai_use_cases", "ai_use_cases_en"]:
+        val = wf.get(key)
+        if isinstance(val, str) and val.strip():
+            try:
+                wf[key] = json.loads(val)
+            except:
+                wf[key] = [] if "use_cases" in key or "tags" in key or "nodes" in key or "categories" in key else val
+        elif val is None and (key.endswith("nodes") or key.endswith("categories") or "use_cases" in key or "tags" in key):
+            wf[key] = []
     return JSONResponse(wf)
 
 
