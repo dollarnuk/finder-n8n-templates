@@ -1,5 +1,5 @@
 """
-AI Workflow Analyzer (Gemini) — аналізує n8n воркфлоу через Google Gemini API.
+AI Workflow Analyzer (OpenAI) — аналізує n8n воркфлоу через OpenAI API.
 Оцінює: корисність, універсальність, складність, масштабність.
 Генерує: короткий опис українською + теги для пошуку.
 """
@@ -8,17 +8,20 @@ import os
 import json
 import asyncio
 import logging
-import google.generativeai as genai
+from openai import OpenAI
 
 from database import update_workflow_ai, get_unanalyzed_workflows, get_workflow
 
 logger = logging.getLogger(__name__)
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "models/gemini-1.5-flash")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY, transport="rest")
+try:
+    client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+except Exception as e:
+    logger.error(f"Failed to initialize OpenAI client: {e}")
+    client = None
 
 # Global status for tracking progress
 analysis_status = {
@@ -53,28 +56,7 @@ Workflow:
 10. integrations_summary_uk / integrations_summary_en — людяний опис сервісів, що з'єднуються.
 11. difficulty_level — рівень складності (beginner, intermediate, advanced).
 
-Відповідь ТІЛЬКИ валідний JSON:
-{{
-  "usefulness": N, 
-  "universality": N, 
-  "complexity": N, 
-  "scalability": N, 
-  "suggested_name": "...",
-  "uk": {{
-    "summary": "...", 
-    "use_cases": ["...", "..."],
-    "target_audience": "...",
-    "integrations_summary": "..."
-  }},
-  "en": {{
-    "summary": "...", 
-    "use_cases": ["...", "..."],
-    "target_audience": "...",
-    "integrations_summary": "..."
-  }},
-  "tags": ["tag1", "tag2"],
-  "difficulty_level": "..."
-}}"""
+Відповідь ТІЛЬКИ у форматі JSON."""
 
 
 def _build_prompt(wf: dict) -> str:
@@ -92,29 +74,32 @@ def _build_prompt(wf: dict) -> str:
 
 
 async def analyze_workflow(wf: dict) -> dict:
-    """Analyze a single workflow using Gemini API.
+    """Analyze a single workflow using OpenAI API.
     Returns dict with scores, summary and tags, or None on error.
     """
-    if not GEMINI_API_KEY:
-        logger.error("GEMINI_API_KEY not set")
+    if not OPENAI_API_KEY:
+        logger.error("OPENAI_API_KEY not set")
+        return None
+    
+    if not client:
+        logger.error("OpenAI client not initialized")
         return None
 
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL)
         prompt = _build_prompt(wf)
         
-        # Using to_thread for the sync call to avoid await expression issues
         response = await asyncio.to_thread(
-            model.generate_content,
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                candidate_count=1,
-                temperature=0.3,
-                response_mime_type="application/json",
-            )
+            client.chat.completions.create,
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that outputs JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3
         )
         
-        raw = response.text.strip()
+        raw = response.choices[0].message.content.strip()
         result = json.loads(raw)
 
         result.setdefault("uk", {})
@@ -136,10 +121,10 @@ async def analyze_workflow(wf: dict) -> dict:
         return result
 
     except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON from Gemini for workflow {wf.get('id')}: {e}")
+        logger.error(f"Invalid JSON from OpenAI for workflow {wf.get('id')}: {e}")
         return None
     except Exception as e:
-        logger.error(f"Gemini analysis error for workflow {wf.get('id')}: {e}")
+        logger.error(f"OpenAI analysis error for workflow {wf.get('id')}: {e}")
         return None
 
 
@@ -149,8 +134,8 @@ async def analyze_and_save(wf_id: int) -> dict:
     if not wf:
         return {"error": "Workflow not found"}
 
-    if not GEMINI_API_KEY:
-        return {"error": "GEMINI_API_KEY not configured"}
+    if not OPENAI_API_KEY:
+        return {"error": "OPENAI_API_KEY not configured"}
 
     # Parse nodes/categories from JSON strings
     wf_data = {
@@ -293,8 +278,9 @@ async def analyze_batch(limit: int = 50) -> dict:
                     error_details.append({"id": wf["id"], "name": wf["name"][:60]})
                     logger.warning(f"Failed to analyze workflow {wf['id']}: {wf['name'][:50]}")
 
-            # Rate limiting: Gemini free tier is ~15 RPM, use 4s between requests
-            await asyncio.sleep(4.0)
+            # Rate limiting: OpenAI gpt-4o-mini usually has higher limits.
+            # Still a small pause is good for stability.
+            await asyncio.sleep(0.5)
     finally:
         analysis_status["status"] = "idle"
 
