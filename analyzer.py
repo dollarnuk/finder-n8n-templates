@@ -20,6 +20,15 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "models/gemini-flash-latest")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY, transport="rest")
 
+# Global status for tracking progress
+analysis_status = {
+    "status": "idle",  # idle, running
+    "total": 0,
+    "analyzed": 0,
+    "errors": 0,
+    "start_time": None
+}
+
 ANALYSIS_PROMPT = """Ти — експерт з n8n автоматизацій. Проаналізуй цей workflow та дай структуровану відповідь у JSON ДВОМА МОВАМИ (українською та англійською).
 
 Workflow:
@@ -201,51 +210,41 @@ async def analyze_batch(limit: int = 50) -> dict:
     """Analyze a batch of unanalyzed workflows.
     Returns summary of results including error details.
     """
+    global analysis_status
     if not GEMINI_API_KEY:
         return {"error": "GEMINI_API_KEY not configured"}
 
     workflows = get_unanalyzed_workflows(limit)
     if not workflows:
+        analysis_status["status"] = "idle"
         return {"status": "ok", "message": "All workflows already analyzed", "analyzed": 0}
+
+    from datetime import datetime
+    analysis_status.update({
+        "status": "running",
+        "total": len(workflows),
+        "analyzed": 0,
+        "errors": 0,
+        "start_time": datetime.utcnow().isoformat()
+    })
 
     analyzed = 0
     errors = 0
     error_details = []
 
-    for wf in workflows:
-        # Parse nodes/categories
-        wf_data = {
-            "id": wf["id"],
-            "name": wf["name"],
-            "description": wf["description"],
-            "nodes": json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"],
-            "categories": json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"],
-            "node_count": wf["node_count"],
-            "trigger_type": wf["trigger_type"],
-        }
+    try:
+        for wf in workflows:
+            # Parse nodes/categories
+            wf_data = {
+                "id": wf["id"],
+                "name": wf["name"],
+                "description": wf["description"],
+                "nodes": json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"],
+                "categories": json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"],
+                "node_count": wf["node_count"],
+                "trigger_type": wf["trigger_type"],
+            }
 
-        result = await analyze_workflow(wf_data)
-        if result:
-            update_workflow_ai(
-                wf["id"],
-                usefulness=result["usefulness"],
-                universality=result["universality"],
-                complexity=result["complexity"],
-                scalability=result["scalability"],
-                summary=result["uk"]["summary"],
-                tags=result["tags"],
-                use_cases=result["uk"]["use_cases"],
-                target_audience=result["uk"]["target_audience"],
-                integrations_summary=result["uk"]["integrations_summary"],
-                difficulty_level=result["difficulty_level"],
-                result_en=result["en"]
-            )
-            analyzed += 1
-            logger.info(f"Analyzed {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
-        else:
-            # Retry once after a longer pause (likely rate limit)
-            logger.warning(f"First attempt failed for {wf['id']}: {wf['name'][:50]}, retrying in 10s...")
-            await asyncio.sleep(10.0)
             result = await analyze_workflow(wf_data)
             if result:
                 update_workflow_ai(
@@ -263,14 +262,41 @@ async def analyze_batch(limit: int = 50) -> dict:
                     result_en=result["en"]
                 )
                 analyzed += 1
-                logger.info(f"Retry OK {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
+                analysis_status["analyzed"] = analyzed
+                logger.info(f"Analyzed {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
             else:
-                errors += 1
-                error_details.append({"id": wf["id"], "name": wf["name"][:60]})
-                logger.warning(f"Failed to analyze workflow {wf['id']}: {wf['name'][:50]}")
+                # Retry once after a longer pause (likely rate limit)
+                logger.warning(f"First attempt failed for {wf['id']}: {wf['name'][:50]}, retrying in 10s...")
+                await asyncio.sleep(10.0)
+                result = await analyze_workflow(wf_data)
+                if result:
+                    update_workflow_ai(
+                        wf["id"],
+                        usefulness=result["usefulness"],
+                        universality=result["universality"],
+                        complexity=result["complexity"],
+                        scalability=result["scalability"],
+                        summary=result["uk"]["summary"],
+                        tags=result["tags"],
+                        use_cases=result["uk"]["use_cases"],
+                        target_audience=result["uk"]["target_audience"],
+                        integrations_summary=result["uk"]["integrations_summary"],
+                        difficulty_level=result["difficulty_level"],
+                        result_en=result["en"]
+                    )
+                    analyzed += 1
+                    analysis_status["analyzed"] = analyzed
+                    logger.info(f"Retry OK {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
+                else:
+                    errors += 1
+                    analysis_status["errors"] = errors
+                    error_details.append({"id": wf["id"], "name": wf["name"][:60]})
+                    logger.warning(f"Failed to analyze workflow {wf['id']}: {wf['name'][:50]}")
 
-        # Rate limiting: Gemini free tier is ~15 RPM, use 4s between requests
-        await asyncio.sleep(4.0)
+            # Rate limiting: Gemini free tier is ~15 RPM, use 4s between requests
+            await asyncio.sleep(4.0)
+    finally:
+        analysis_status["status"] = "idle"
 
     return {
         "status": "ok",

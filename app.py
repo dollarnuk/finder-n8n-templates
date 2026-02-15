@@ -14,7 +14,7 @@ from database import init_db, search_workflows, get_workflow, delete_workflow, \
     get_all_nodes, get_all_categories, get_stats, get_github_repos, delete_github_repo, clear_all_workflows
 from importer import import_from_json, import_from_url, import_from_directory, \
     sync_github_repo, sync_all_repos
-from analyzer import analyze_and_save, analyze_batch
+from analyzer import analyze_and_save, analyze_batch, analysis_status
 from ai_search import perform_ai_search
 
 logging.basicConfig(level=logging.INFO)
@@ -419,6 +419,13 @@ async def api_admin_analyze_all(request: Request):
     except Exception as e:
         logger.error(f"Analyze all error: {e}")
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+@app.get("/api/admin/analysis-status")
+async def api_admin_analysis_status(request: Request):
+    require_auth(request, admin_only=True)
+    return JSONResponse({
+        **analysis_status,
+        "total_unanalyzed": get_stats()["total_workflows"] - get_stats()["analyzed_count"]
+    })
 
 
 # ==================== AI Chat Search ====================

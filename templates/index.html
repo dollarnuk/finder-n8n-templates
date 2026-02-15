@@ -913,6 +913,98 @@
       gap: 6px;
     }
 
+    /* ===== AI Progress Widget ===== */
+    .ai-progress-widget {
+      position: fixed;
+      bottom: 100px;
+      right: 30px;
+      z-index: 140;
+      width: 280px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+      transform: translateY(20px);
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .ai-progress-widget.active {
+      transform: translateY(0);
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .ai-progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .ai-progress-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ai-progress-pulse {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 0 var(--accent-glow);
+      animation: aiPulse 1.5s infinite;
+    }
+
+    @keyframes aiPulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7);
+      }
+
+      70% {
+        box-shadow: 0 0 0 10px rgba(79, 70, 229, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+      }
+    }
+
+    .ai-progress-bar-bg {
+      height: 6px;
+      background: var(--bg-card);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .ai-progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+
+    .ai-progress-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .ai-progress-error {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--danger);
+      display: none;
+    }
+
     /* ===== Responsive ===== */
     @media (max-width: 768px) {
       .header-inner {
@@ -1601,7 +1693,11 @@
         workflow: "Воркфлоу",
         workflowDetails: "Деталі воркфлоу",
         workflowTrigger: "Workflow",
-        githubRepo: "GitHub Repo"
+        githubRepo: "GitHub Repo",
+        aiProgressTitle: "AI Аналіз у фоні",
+        aiProgressRunning: "Обробка воркфлоу...",
+        aiProgressIdle: "Очікування...",
+        aiProgressError: "Помилки: {count}"
       },
       en: {
         loginBtn: "Login",
@@ -1748,7 +1844,11 @@
         workflow: "Workflow",
         workflowDetails: "Workflow Details",
         workflowTrigger: "Workflow",
-        githubRepo: "GitHub Repo"
+        githubRepo: "GitHub Repo",
+        aiProgressTitle: "AI Analysis in Background",
+        aiProgressRunning: "Processing workflows...",
+        aiProgressIdle: "Waiting...",
+        aiProgressError: "Errors: {count}"
       }
     };
 
@@ -1798,6 +1898,7 @@
       updateUI();
       loadStats();
       doSearch();
+      if (is_admin) startStatusPolling();
     });
 
     // ===== Auth =====
@@ -2504,7 +2605,67 @@
       document.getElementById('toasts').appendChild(el);
       setTimeout(() => el.remove(), 4000);
     }
+
+    // ===== AI Analysis Progress Polling =====
+    let statusInterval = null;
+    function startStatusPolling() {
+      if (statusInterval) return;
+      statusInterval = setInterval(fetchAnalysisStatus, 3000);
+      fetchAnalysisStatus(); // Initial fetch
+    }
+
+    async function fetchAnalysisStatus() {
+      if (!is_admin) return;
+      try {
+        const r = await fetch('/api/admin/analysis-status');
+        const data = await r.json();
+        const widget = document.getElementById('aiProgressWidget');
+
+        if (data.status === 'running') {
+          widget.classList.add('active');
+          document.getElementById('aiProgressCount').textContent = `${data.analyzed}/${data.total}`;
+
+          const fill = document.getElementById('aiProgressFill');
+          const percent = (data.analyzed / data.total) * 100;
+          fill.style.width = percent + '%';
+
+          if (data.errors > 0) {
+            document.getElementById('aiProgressErrorTip').style.display = 'block';
+            document.getElementById('aiProgressErrorTip').textContent = i18n[currentLang].aiProgressError.replace('{count}', data.errors);
+          } else {
+            document.getElementById('aiProgressErrorTip').style.display = 'none';
+          }
+        } else {
+          // If was running but now idle, refresh stats and maybe hide after delay
+          if (widget.classList.contains('active')) {
+            loadStats();
+            doSearch();
+            setTimeout(() => widget.classList.remove('active'), 5000);
+          }
+        }
+      } catch (e) { console.error("Polling error:", e); }
+    }
   </script>
+  <!-- AI Progress Widget (Floating) -->
+  <div class="ai-progress-widget" id="aiProgressWidget">
+    <div class="ai-progress-header">
+      <div class="ai-progress-title">
+        <div class="ai-progress-pulse"></div>
+        <span data-i18n="aiProgressTitle">AI Аналіз у фоні</span>
+      </div>
+      <div class="ai-progress-info" style="font-weight:600" id="aiProgressCount">0/0</div>
+    </div>
+    <div class="ai-progress-bar-fill-container"
+      style="height: 6px; background: var(--bg-card); border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+      <div class="ai-progress-bar-fill" id="aiProgressFill"
+        style="height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.5s ease;">
+      </div>
+    </div>
+    <div class="ai-progress-info">
+      <span data-i18n="aiProgressRunning">Обробка воркфлоу...</span>
+    </div>
+    <div class="ai-progress-error" id="aiProgressErrorTip"></div>
+  </div>
 </body>
 
 </html>
