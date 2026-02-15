@@ -16,9 +16,6 @@ venv/
 # Environment
 .env
 
-# Workflow JSON files (too large for git, auto-imported on first run)
-data/workflows/
-
 # Temp files
 nul
 available_models.txt
