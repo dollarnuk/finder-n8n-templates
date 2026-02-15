@@ -330,8 +330,8 @@ def get_stats():
     total = conn.execute("SELECT COUNT(*) FROM workflows").fetchone()[0]
     repos = conn.execute("SELECT COUNT(*) FROM github_repos").fetchone()[0]
     unique_nodes = conn.execute("SELECT COUNT(DISTINCT node_name) FROM workflow_nodes").fetchone()[0]
-    analyzed = conn.execute("SELECT COUNT(*) FROM workflows WHERE ai_analyzed_at != ''").fetchone()[0]
-    avg_usefulness = conn.execute("SELECT COALESCE(AVG(ai_usefulness), 0) FROM workflows WHERE ai_analyzed_at != ''").fetchone()[0]
+    analyzed = conn.execute("SELECT COUNT(*) FROM workflows WHERE ai_analyzed_at != '' AND ai_analyzed_at IS NOT NULL AND ai_usefulness > 0").fetchone()[0]
+    avg_usefulness = conn.execute("SELECT COALESCE(AVG(ai_usefulness), 0) FROM workflows WHERE ai_analyzed_at != '' AND ai_usefulness > 0").fetchone()[0]
     return {
         "total_workflows": total, "total_repos": repos, "unique_nodes": unique_nodes,
         "analyzed_count": analyzed, "avg_usefulness": round(avg_usefulness, 1)
@@ -368,11 +368,11 @@ def update_workflow_ai(wf_id, usefulness, universality, complexity, scalability,
 
 
 def get_unanalyzed_workflows(limit=50):
-    """Get workflows that haven't been analyzed by AI yet."""
+    """Get workflows that haven't been analyzed by AI yet, or where analysis failed (no scores)."""
     conn = get_db()
     rows = conn.execute("""
         SELECT id, name, description, nodes, categories, node_count, trigger_type, json_content
-        FROM workflows WHERE ai_analyzed_at = '' OR ai_analyzed_at IS NULL
+        FROM workflows WHERE ai_analyzed_at = '' OR ai_analyzed_at IS NULL OR ai_usefulness = 0
         LIMIT ?
     """, (limit,)).fetchall()
     return [dict(r) for r in rows]
