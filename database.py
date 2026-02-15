@@ -459,8 +459,45 @@ def clear_all_workflows():
     conn.execute("DELETE FROM workflows")
     conn.commit()
 def _migrate_user_tables():
-    """Ensure user usage records exist for all users."""
+    """Ensure user tables exist and usage records exist for all users."""
     conn = get_db()
+    # Force creation of tables (safeguard)
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            name TEXT,
+            picture TEXT,
+            role TEXT DEFAULT 'user',
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS user_usage (
+            user_id INTEGER PRIMARY KEY,
+            ai_chat_count INTEGER DEFAULT 0,
+            last_reset_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            user_id INTEGER PRIMARY KEY,
+            payment_customer_id TEXT,
+            payment_sub_id TEXT,
+            status TEXT DEFAULT 'inactive',
+            expires_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS payment_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            payment_order_id TEXT,
+            amount REAL,
+            currency TEXT,
+            status TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    """)
+    conn.commit()
+
     conn.execute("""
         INSERT OR IGNORE INTO user_usage (user_id, ai_chat_count, last_reset_at)
         SELECT id, 0, datetime('now') FROM users

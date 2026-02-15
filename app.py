@@ -213,7 +213,22 @@ async def api_auth_me(request: Request):
     if not user:
         return JSONResponse({"authenticated": False})
     
-    usage = get_user_usage(user["id"]) if user.get("id") else {"ai_chat_count": 0, "sub_status": "inactive"}
+    # Auto-migrate legacy sessions (users who logged in before Phase 16)
+    if 'id' not in user and user.get('email'):
+        try:
+            user_id = upsert_user(
+                email=user['email'],
+                name=user.get('name', user['email'].split('@')[0]),
+                picture=user.get('picture', '')
+            )
+            user['id'] = user_id
+            request.session['user'] = user  # Update session object
+            logger.info(f"Auto-migrated legacy session for {user['email']} -> ID {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to auto-migrate session for {user['email']}: {e}")
+
+    user_id = user.get("id")
+    usage = get_user_usage(user_id) if user_id else {"ai_chat_count": 0, "sub_status": "inactive"}
     
     return JSONResponse({
         "authenticated": True,
