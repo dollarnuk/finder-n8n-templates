@@ -122,10 +122,46 @@ def init_db():
                 new.ai_summary, new.ai_tags, new.ai_use_cases, new.ai_target_audience, new.ai_integrations_summary,
                 new.ai_summary_en, new.ai_use_cases_en, new.ai_target_audience_en, new.ai_integrations_summary_en);
         END;
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            name TEXT,
+            picture TEXT,
+            role TEXT DEFAULT 'user',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS user_usage (
+            user_id INTEGER PRIMARY KEY,
+            ai_chat_count INTEGER DEFAULT 0,
+            last_reset_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            user_id INTEGER PRIMARY KEY,
+            payment_customer_id TEXT,
+            payment_sub_id TEXT,
+            status TEXT DEFAULT 'inactive',
+            expires_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS payment_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            payment_order_id TEXT,
+            amount REAL,
+            currency TEXT,
+            status TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
     """)
     conn.commit()
     _migrate_ai_columns()
     _migrate_lookup_tables()
+    _migrate_user_tables()
 
 
 def _migrate_ai_columns():
@@ -421,4 +457,99 @@ def clear_all_workflows():
     """Wipe all workflows from the database."""
     conn = get_db()
     conn.execute("DELETE FROM workflows")
+    conn.commit()
+def _migrate_user_tables():
+    """Ensure user usage records exist for all users."""
+    conn = get_db()
+    conn.execute("""
+        INSERT OR IGNORE INTO user_usage (user_id, ai_chat_count, last_reset_at)
+        SELECT id, 0, datetime('now') FROM users
+    """)
+    conn.commit()
+
+
+def upsert_user(email, name, picture):
+    """Insert or update user from OAuth data."""
+    conn = get_db()
+    now = datetime.utcnow().isoformat()
+    cursor = conn.execute("SELECT id FROM users WHERE email = ?", (email,))
+    row = cursor.fetchone()
+    
+    if row:
+        user_id = row["id"]
+        conn.execute("""
+            UPDATE users SET name = ?, picture = ? WHERE id = ?
+        """, (name, picture, user_id))
+    else:
+        cursor = conn.execute("""
+            INSERT INTO users (email, name, picture, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (email, name, picture, now))
+        user_id = cursor.lastrowid
+        conn.execute("INSERT INTO user_usage (user_id, ai_chat_count, last_reset_at) VALUES (?, 0, ?)", (user_id, now))
+    
+    conn.commit()
+    return user_id
+
+def update_subscription(user_id, payment_customer_id, payment_sub_id, status, expires_at=None):
+    """Update user subscription status."""
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO subscriptions (user_id, payment_customer_id, payment_sub_id, status, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            payment_customer_id = excluded.payment_customer_id,
+            payment_sub_id = excluded.payment_sub_id,
+            status = excluded.status,
+            expires_at = excluded.expires_at
+    """, (user_id, payment_customer_id, payment_sub_id, status, expires_at))
+    conn.commit()
+
+def add_payment_record(user_id, payment_order_id, amount, currency, status):
+    """Log a payment transaction."""
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO payment_history (user_id, payment_order_id, amount, currency, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (user_id, payment_order_id, amount, currency, status, datetime.utcnow().isoformat()))
+    conn.commit()
+
+def get_payment_history(user_id):
+    """Retrieve payment history for a user."""
+    conn = get_db()
+    cursor = conn.execute("""
+        SELECT * FROM payment_history WHERE user_id = ? ORDER BY created_at DESC
+    """, (user_id,))
+    return [dict(row) for row in cursor.fetchall()]
+
+def get_user_by_payment_customer(payment_customer_id):
+    """Find user by payment customer ID."""
+    conn = get_db()
+    cursor = conn.execute("SELECT user_id FROM subscriptions WHERE payment_customer_id = ?", (payment_customer_id,))
+    row = cursor.fetchone()
+    return row["user_id"] if row else None
+
+
+def get_user_by_email(email):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_user_usage(user_id):
+    conn = get_db()
+    row = conn.execute("""
+        SELECT u.ai_chat_count, s.status as sub_status, s.expires_at
+        FROM user_usage u
+        LEFT JOIN subscriptions s ON u.user_id = s.user_id
+        WHERE u.user_id = ?
+    """, (user_id,)).fetchone()
+    if row:
+        return dict(row)
+    return {"ai_chat_count": 0, "sub_status": "inactive", "expires_at": None}
+
+
+def increment_user_usage(user_id):
+    conn = get_db()
+    conn.execute("UPDATE user_usage SET ai_chat_count = ai_chat_count + 1 WHERE user_id = ?", (user_id,))
     conn.commit()

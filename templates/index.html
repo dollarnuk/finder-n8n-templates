@@ -1516,12 +1516,57 @@
     </div>
   </div>
 
-  <!-- ===== AI CHAT ===== -->
+  <!-- ===== UPGRADE PRO MODAL ===== -->
+  <div class="modal-overlay" id="upgradeModal">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <div class="modal-title" data-i18n="upgradeModalTitle">Апгрейд до PRO</div>
+        <button class="modal-close" onclick="closeModal('upgradeModal')">✕</button>
+      </div>
+      <div class="modal-body" style="text-align:center">
+        <div style="font-size:48px; margin:20px 0">🚀</div>
+        <h3 style="margin-bottom:16px" data-i18n="upgradePrice">Лише $1 / місяць</h3>
+        <ul style="text-align:left; margin-bottom:24px; padding-left:20px; color:var(--text-dim); line-height:1.8">
+          <li data-i18n="upgradeFeature1">⚡ Необмежений AI-пошук</li>
+          <li data-i18n="upgradeFeature2">🔍 Глибокі сценарії використання</li>
+          <li data-i18n="upgradeFeature3">💎 Пріоритетна підтримка</li>
+          <li data-i18n="upgradeFeature4">🌍 Доступ до Hub з будь-якої точки світу</li>
+        </ul>
+        <button class="btn btn-primary" style="width:100%; height:48px; font-weight:600"
+          onclick="startWayForPayCheckout()" data-i18n="upgradeAction">
+          Оформити підписку через WayForPay
+        </button>
+        <p style="font-size:11px; color:var(--text-muted); margin-top:16px">Оплату обробляє WayForPay. Безпечно та
+          надійно.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PROFILE MODAL ===== -->
+  <div class="modal-overlay" id="profileModal">
+    <div class="modal" style="max-width:450px">
+      <div class="modal-header">
+        <div class="modal-title" data-i18n="historyTitle">Історія платежів</div>
+        <button class="modal-close" onclick="closeModal('profileModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="paymentHistoryList">
+          <div class="loading">
+            <div class="spinner"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   <button class="ai-chat-btn" id="aiChatBtn" onclick="toggleChat()" title="AI Помічник">🤖</button>
   <div class="ai-chat-container" id="aiChatContainer">
     <div class="ai-chat-header">
       <div class="logo-icon" style="width:24px;height:24px;font-size:12px">AI</div>
-      <b>n8n Помічник</b>
+      <b style="flex:1">n8n Помічник</b>
+      <div id="aiSearchLimit"
+        style="font-size:11px; color:var(--text-muted); background:var(--bg-light); padding:2px 8px; border-radius:10px">
+        0/3</div>
     </div>
     <div class="ai-chat-body" id="chatBody">
       <div class="ai-bubble ai-bubble-bot">Привіт! Я допоможу знайти потрібний workflow. Напиши, що саме ти хочеш
@@ -1540,8 +1585,6 @@
 
   <script>
     // ===== State =====
-    let authenticated = {{ 'true' if authenticated else 'false' }};
-    let is_admin = {{ 'true' if is_admin else 'false' }};
     let currentPage = 1;
     let searchTimeout = null;
 
@@ -1648,6 +1691,25 @@
         statusError: "Помилка",
         statusNetworkError: "Помилка мережі",
         noRepos: "Немає репозиторіїв",
+        proBadge: "PRO",
+        aiSearchLimit: "Пошуків: {count}/3",
+        proUnlimited: "Unlimited AI",
+        upgradeBtn: "Перейти на PRO ($1/міс)",
+        upgradeModalTitle: "Апгрейд до PRO",
+        upgradeFeature1: "⚡ Необмежений AI-пошук",
+        upgradeFeature2: "🔍 Глибокі сценарії використання",
+        upgradeFeature3: "💎 Пріоритетна підтримка",
+        upgradeFeature4: "🌍 Доступ до Hub з будь-якої точки світу",
+        upgradePrice: "Лише 40 грн / місяць",
+        upgradeAction: "Оформити підписку через WayForPay",
+        historyTitle: "Історія платежів",
+        limitReachedTitle: "Ліміт вичерпано",
+        limitReachedText: "Ви використали всі безкоштовні AI-пошуки. Перейдіть на Pro версію, щоб продовжувати користуватися розумним пошуком.",
+        historyEmpty: "Історія платежів порожня",
+        historyError: "Помилка завантаження історії",
+        historyDate: "Дата",
+        historyAmount: "Сума",
+        historyStatus: "Статус",
         repoWorkflows: "Воркфлоу",
         repoSynced: "Синхр",
         repoNever: "ніколи",
@@ -1669,7 +1731,7 @@
         aiUseCases: "Сценарії використання",
         aiIntegrations: "Інтеграції",
         aiAudience: "Цільова аудиторія",
-        aiAnalysisSection: "AI-аналіз",
+        aiAnalysisSection: "AI Аналіз",
         aiTagsSection: "AI-теги",
         additionalAnalytics: "Додаткова аналітика",
         level: "Рівень",
@@ -1799,6 +1861,25 @@
         statusError: "Error",
         statusNetworkError: "Network Error",
         noRepos: "No repositories",
+        proBadge: "PRO",
+        aiSearchLimit: "Searches: {count}/3",
+        proUnlimited: "Unlimited AI",
+        upgradeBtn: "Upgrade to PRO ($1/mo)",
+        upgradeModalTitle: "Upgrade to PRO",
+        upgradeFeature1: "⚡ Unlimited AI Search",
+        upgradeFeature2: "🔍 Deep Use Case Scenarios",
+        upgradeFeature3: "💎 Priority Support",
+        upgradeFeature4: "🌍 Access Hub from anywhere",
+        upgradePrice: "Only ~40 UAH ($1) / month",
+        upgradeAction: "Subscribe with WayForPay",
+        historyTitle: "Payment History",
+        limitReachedTitle: "Limit Reached",
+        limitReachedText: "You've used all free AI searches. Upgrade to Pro to continue using smart search.",
+        historyEmpty: "No payment history found",
+        historyError: "Error loading history",
+        historyDate: "Date",
+        historyAmount: "Amount",
+        historyStatus: "Status",
         repoWorkflows: "Workflows",
         repoSynced: "Synced",
         repoNever: "never",
@@ -1899,6 +1980,16 @@
       loadStats();
       doSearch();
       if (is_admin) startStatusPolling();
+
+      // Handle payment redirect results
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('payment') === 'success') {
+        toast('Оплата успішна! Ваш статус PRO активовано.', 'success');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (params.get('payment') === 'cancel') {
+        toast('Оплата скасована.', 'info');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
     });
 
     // ===== Auth =====
@@ -1909,25 +2000,41 @@
         authenticated = data.authenticated;
         is_admin = data.is_admin;
         const section = document.getElementById('authSection');
-        if (authenticated) {
+        if (data.authenticated) {
+          authenticated = true;
+          is_admin = data.is_admin;
           section.innerHTML = `
             <div style="display:flex;align-items:center;gap:12px">
               ${is_admin ? `<button class="btn btn-sm" onclick="openModal('importModal')" data-i18n="importBtn">${i18n[currentLang].importBtn}</button>` : ''}
               ${is_admin ? `<button class="btn btn-sm" onclick="openModal('reposModal');loadRepos()" data-i18n="reposBtn">${i18n[currentLang].reposBtn}</button>` : ''}
-              <div class="user-profile">
+              <div class="user-profile" onclick="openProfileModal()">
                 <img src="${data.user.picture}" class="user-avatar" alt="Avatar">
                 <div style="display:flex;flex-direction:column;gap:1px">
-                  <span style="font-size:12px;font-weight:700;line-height:1.2">${esc(data.user.name)}</span>
+                  <span style="font-size:12px;font-weight:700;line-height:1.2" id="userName">${esc(data.user.name)}</span>
                   <span style="font-size:10px;color:var(--text-dim);line-height:1">${esc(data.user.email)}</span>
                 </div>
-                <button class="btn btn-ghost" onclick="doLogout()" style="padding:4px 8px; font-size:12px" data-i18n="toastLogoutSuccess">${i18n[currentLang].toastLogoutSuccess}</button>
               </div>
+              <button class="btn btn-ghost" onclick="doLogout()" style="padding:4px 8px; font-size:12px" data-i18n="toastLogoutSuccess">${i18n[currentLang].toastLogoutSuccess}</button>
             </div>
           `;
-        } else {
-          section.innerHTML = `<button class="btn btn-primary" onclick="openAuthModal()" id="loginBtn" data-i18n="loginBtn">${i18n[currentLang].loginBtn}</button>`;
+
+          if (data.is_admin) {
+            // document.getElementById('adminReposBtn').style.display = 'inline-flex'; // This element doesn't exist in the current HTML
+          }
+
+          // Show Pro badge if active
+          if (data.usage && data.usage.sub_status === 'active') {
+            const badge = document.createElement('span');
+            badge.className = 'status-badge status-ok';
+            badge.style.marginLeft = '5px';
+            badge.textContent = i18n[currentLang].proBadge;
+            document.getElementById('userName').appendChild(badge);
+            document.getElementById('aiSearchLimit').textContent = i18n[currentLang].proUnlimited;
+          } else if (data.usage) {
+            document.getElementById('aiSearchLimit').textContent = i18n[currentLang].aiSearchLimit.replace('{count}', data.usage.ai_chat_count);
+          }
         }
-      } catch (e) { }
+      } catch (e) { console.error('Auth check failed', e); }
     }
 
     function doGoogleLogin() {
@@ -2339,7 +2446,7 @@
         resultsList.appendChild(row);
 
         // Update progress
-        const percent = Math.round(((i) / total) * 100);
+        const percent = (i / total) * 100;
         progressFill.style.width = percent + '%';
         progressCount.textContent = `${i}/${total}`;
         progressText.textContent = i18n[currentLang].processing;
@@ -2547,6 +2654,86 @@
         nodeSel.innerHTML = '<option value="">Всі ноди</option>' +
           data.nodes.map(n => `<option value="${n}" ${n === nval ? 'selected' : ''}>${n}</option>`).join('');
       } catch (e) { }
+    }
+
+    // ===== Payments & Profile =====
+    async function startWayForPayCheckout() {
+      try {
+        const btn = document.querySelector('#upgradeModal .btn-primary');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        const r = await fetch('/api/payments/create-order', { method: 'POST' });
+        const params = await r.json();
+
+        if (params.merchantAccount) {
+          // Create a dynamic form and submit to WayForPay
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = 'https://secure.wayforpay.com/pay';
+          form.acceptCharset = 'utf-8';
+
+          for (const key in params) {
+            if (Array.isArray(params[key])) {
+              params[key].forEach(val => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = val;
+                form.appendChild(input);
+              });
+            } else {
+              const input = document.createElement('input');
+              input.type = 'hidden';
+              input.name = key;
+              input.value = params[key];
+              form.appendChild(input);
+            }
+          }
+          document.body.appendChild(form);
+          form.submit();
+        } else {
+          toast(params.detail || 'Помилка WayForPay', 'error');
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      } catch (e) {
+        toast('Помилка мережі', 'error');
+        console.error(e);
+      }
+    }
+
+    async function openProfileModal() {
+      openModal('profileModal');
+      const list = document.getElementById('paymentHistoryList');
+      list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+      try {
+        const r = await fetch('/api/payments/history');
+        const data = await r.json();
+
+        if (data.length === 0) {
+          list.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-dim)">${i18n[currentLang].historyEmpty}</div>`;
+          return;
+        }
+
+        let html = `<table class="import-results-table"><thead><tr><th>${i18n[currentLang].historyDate}</th><th>${i18n[currentLang].historyAmount}</th><th>${i18n[currentLang].historyStatus}</th></tr></thead><tbody>`;
+        data.forEach(p => {
+          const date = new Date(p.created_at).toLocaleDateString(currentLang === 'uk' ? 'uk-UA' : 'en-US');
+          html += `
+            <tr>
+              <td>${date}</td>
+              <td>$${p.amount}</td>
+              <td><span class="status-badge status-ok">${p.status}</span></td>
+            </tr>
+          `;
+        });
+        html += '</tbody></table>';
+        list.innerHTML = html;
+      } catch (e) {
+        list.innerHTML = `<div class="status-badge status-error">${i18n[currentLang].historyError}</div>`;
+      }
     }
 
     // ===== Modal helpers =====

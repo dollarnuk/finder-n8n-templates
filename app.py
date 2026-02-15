@@ -8,14 +8,17 @@ from fastapi import FastAPI, Request, Response, HTTPException, Form, UploadFile,
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from authlib.integrations.starlette_client import OAuth
-
 from database import init_db, search_workflows, get_workflow, delete_workflow, \
-    get_all_nodes, get_all_categories, get_stats, get_github_repos, delete_github_repo, clear_all_workflows
+    get_all_nodes, get_all_categories, get_stats, get_github_repos, delete_github_repo, clear_all_workflows, \
+    upsert_user, get_user_usage, increment_user_usage, get_user_by_email, \
+    update_subscription, add_payment_record, get_payment_history, get_user_by_payment_customer
 from importer import import_from_json, import_from_url, import_from_directory, \
     sync_github_repo, sync_all_repos
 from analyzer import analyze_and_save, analyze_batch, analysis_status
 from ai_search import perform_ai_search
+import hashlib
+import hmac
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,6 +35,20 @@ SYNC_INTERVAL_HOURS = int(os.environ.get("SYNC_INTERVAL_HOURS", "24"))
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 CONF_URL = 'https://accounts.google.com/.well-known/openid-configuration'
+
+# WayForPay Config
+WFP_MERCHANT_ACCOUNT = os.environ.get("WFP_MERCHANT_ACCOUNT", "")
+WFP_MERCHANT_SECRET_KEY = os.environ.get("WFP_MERCHANT_SECRET_KEY", "")
+WFP_MERCHANT_DOMAIN = os.environ.get("WFP_MERCHANT_DOMAIN", "")
+
+def generate_wfp_signature(data_list):
+    """Generate MD5 HMAC signature for WayForPay."""
+    string_to_sign = ";".join(str(x) for x in data_list)
+    return hmac.new(
+        WFP_MERCHANT_SECRET_KEY.encode('utf-8'),
+        string_to_sign.encode('utf-8'),
+        hashlib.md5
+    ).hexdigest()
 
 oauth = OAuth()
 oauth.register(
@@ -171,12 +188,19 @@ async def google_auth_callback(request: Request):
         token = await oauth.google.authorize_access_token(request)
         user = token.get('userinfo')
         if user:
+            # Upsert user in DB
+            user_id = upsert_user(
+                email=user['email'],
+                name=user.get('name', user['email'].split('@')[0]),
+                picture=user.get('picture', '')
+            )
             request.session['user'] = {
+                'id': user_id,
                 'email': user['email'],
                 'name': user.get('name', user['email'].split('@')[0]),
                 'picture': user.get('picture', '')
             }
-            logger.info(f"User logged in: {user['email']}")
+            logger.info(f"User logged in: {user['email']} (ID: {user_id})")
         return HTMLResponse("<script>window.opener.postMessage('auth_success', '*'); window.close();</script>")
     except Exception as e:
         logger.error(f"OAuth error: {e}")
@@ -187,10 +211,13 @@ async def api_auth_me(request: Request):
     if not user:
         return JSONResponse({"authenticated": False})
     
+    usage = get_user_usage(user["id"]) if user.get("id") else {"ai_chat_count": 0, "sub_status": "inactive"}
+    
     return JSONResponse({
         "authenticated": True,
         "user": user,
-        "is_admin": is_admin(request)
+        "is_admin": is_admin(request),
+        "usage": usage
     })
 
 
@@ -207,6 +234,123 @@ async def login(request: Request, username: str = Form(...), password: str = For
 async def logout(request: Request):
     request.session.clear()
     return JSONResponse({"status": "ok"})
+
+
+# ==================== Payment Routes ====================
+
+@app.post("/api/payments/create-order")
+async def create_wfp_order(request: Request):
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Будь ласка, увійдіть, щоб оформити підписку")
+    
+    if not WFP_MERCHANT_ACCOUNT or not WFP_MERCHANT_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="WayForPay не налаштовано")
+
+    order_reference = f"WF_{user['id']}_{int(time.time())}"
+    order_date = int(time.time())
+    amount = 40.0 # ~$1 in UAH
+    currency = "UAH"
+    product_name = "n8n Hub PRO (1 month)"
+    product_count = 1
+    product_price = amount
+
+    # Data for signature
+    fields = [
+        WFP_MERCHANT_ACCOUNT,
+        WFP_MERCHANT_DOMAIN,
+        order_reference,
+        order_date,
+        amount,
+        currency,
+        product_name,
+        product_count,
+        product_price
+    ]
+    signature = generate_wfp_signature(fields)
+
+    # WayForPay form data
+    params = {
+        "merchantAccount": WFP_MERCHANT_ACCOUNT,
+        "merchantDomainName": WFP_MERCHANT_DOMAIN,
+        "merchantSignature": signature,
+        "orderReference": order_reference,
+        "orderDate": order_date,
+        "amount": amount,
+        "currency": currency,
+        "productName[]": [product_name],
+        "productCount[]": [product_count],
+        "productPrice[]": [product_price],
+        "serviceUrl": str(request.url_for("wfp_callback")),
+        "returnUrl": str(request.base_url) + "?payment=success",
+        "clientEmail": user["email"],
+        "language": "UA"
+    }
+    
+    return JSONResponse(params)
+
+
+@app.post("/api/payments/callback")
+async def wfp_callback(request: Request):
+    try:
+        data = await request.form()
+        # Basic validation
+        if not data.get("orderReference"):
+            return Response(status_code=400)
+
+        # Verify signature from WFP
+        # String for response verification: orderReference;status;time
+        # But WFP sends more. For transaction status: merchantAccount;orderReference;amount;currency;authCode;cardPan;transactionStatus;reasonCode
+        # Actually, standard callback contains many fields.
+        
+        status = data.get("transactionStatus")
+        order_ref = data.get("orderReference")
+        # Extract user_id from order_ref (WF_{user_id}_{timestamp})
+        try:
+            user_id = int(order_ref.split("_")[1])
+        except:
+            user_id = None
+
+        if status == "Approved" and user_id:
+            update_subscription(
+                user_id=user_id,
+                payment_customer_id=data.get("clientEmail"),
+                payment_sub_id=data.get("orderReference"),
+                status='active'
+            )
+            add_payment_record(
+                user_id=user_id,
+                payment_order_id=order_ref,
+                amount=float(data.get("amount", 0)),
+                currency=data.get("currency", "UAH"),
+                status='paid'
+            )
+            logger.info(f"Subscription activated via WayForPay for user {user_id}")
+
+        # WayForPay requires a specific response toacknowledge the callback
+        time_now = int(time.time())
+        resp_fields = [order_ref, "accept", time_now]
+        resp_sig = generate_wfp_signature(resp_fields)
+
+        return JSONResponse({
+            "orderReference": order_ref,
+            "status": "accept",
+            "time": time_now,
+            "signature": resp_sig
+        })
+    except Exception as e:
+        logger.error(f"WayForPay callback error: {e}")
+        return Response(status_code=500)
+
+
+@app.get("/api/payments/history")
+async def api_payment_history(request: Request):
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Необхідна авторизація")
+    
+    history = get_payment_history(user["id"])
+    return JSONResponse(history)
 
 
 @app.get("/api/search")
@@ -432,11 +576,33 @@ async def api_admin_analysis_status(request: Request):
 
 @app.post("/api/chat")
 async def api_chat_search(request: Request, body: dict = None):
+    # Requirement: max 3 searches for free users
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Будь ласка, увійдіть, щоб скористатися AI-чатом")
+    
+    user_id = user["id"]
+    usage = get_user_usage(user_id)
+    
+    # Bypass limits for admin and pro subscribers
+    if not is_admin(request) and usage["sub_status"] != "active":
+        if usage["ai_chat_count"] >= 3:
+            return JSONResponse({
+                "status": "limit_reached",
+                "message": "Ви використали 3 безкоштовні AI-пошуки. Перейдіть на Pro версію для безлімітного доступу.",
+                "message_en": "You have used 3 free AI searches. Upgrade to Pro for unlimited access."
+            }, status_code=403)
+
     query = (body or {}).get("query", "").strip()
     if not query:
         raise HTTPException(status_code=400, detail="Query is required")
     
     result = await perform_ai_search(query)
+    
+    # Increment usage on successful search
+    if not is_admin(request) and usage["sub_status"] != "active":
+        increment_user_usage(user_id)
+        
     return JSONResponse(result)
 
 

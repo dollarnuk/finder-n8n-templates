@@ -90,18 +90,22 @@ graph TD
 | Таблиця | Призначення |
 |---|---|
 | `workflows` | Основна: id, name, description, nodes (JSON), categories (JSON), node_count, trigger_type, source_url, source_repo, json_content, json_hash (UNIQUE), added_at, updated_at, ai_usefulness, ai_universality, ai_complexity, ai_scalability, ai_summary, ai_tags (JSON), ai_analyzed_at, ai_use_cases (JSON), ai_target_audience, ai_integrations_summary, ai_difficulty_level, **ai_summary_en**, **ai_use_cases_en** (JSON), **ai_target_audience_en**, **ai_integrations_summary_en** |
-| `github_repos` | Зареєстровані GitHub репо для авто-синхронізації: id, repo_url (UNIQUE), last_synced, workflow_count, enabled |
-| `workflow_nodes` | Lookup: workflow_id + node_name (для O(1) фільтрів) |
 | `workflow_categories` | Lookup: workflow_id + category_name (для O(1) фільтрів) |
 | `workflows_fts` | FTS5 віртуальна таблиця (name, description, nodes, categories, ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary, ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en). Оновлюється тригерами |
+| `users` | Користувачі: id, email (UNIQUE), name, picture, role (user/admin), created_at |
+| `user_usage` | Ліміти: user_id (PK), ai_chat_count, last_reset_at |
+| `subscriptions` | Підписки: user_id (PK), payment_customer_id, payment_sub_id, status (active/inactive), expires_at |
+| `payment_history` | Платежі: id, user_id, payment_order_id, amount, currency, status, created_at |
+| `github_repos` | Зареєстровані GitHub репо: id, repo_url (UNIQUE), last_synced, workflow_count, enabled |
 
 **Важливо:** lookup-таблиці `workflow_nodes` та `workflow_categories` дублюють дані з JSON полів `nodes` і `categories` таблиці `workflows`. Це зроблено для швидких фільтрів замість O(n) парсингу JSON. При зміні nodes/categories потрібно оновлювати обидва місця.
 
 ### Авторизація
 
-- **Google OAuth**: Основний метод входу через `authlib`.
+- **Google OAuth**: Авторизація через `authlib`. При першому вході створюється запис у таблиці `users`.
+- **User Persistence**: На відміну від ранніх версій, користувачі тепер зберігаються в БД.
 - **Адміністратор**: Тільки користувач з email `goodstaffshop@gmail.com` має права адміністратора.
-- **Session-based**: Через `starlette.middleware.sessions.SessionMiddleware` (cookies з підписом `SECRET_KEY`).
+- **Session-based**: Через `starlette.middleware.sessions.SessionMiddleware`. У сесії зберігається `user['id']` з БД.
 - **Рівні доступу**:
   - Гість/Користувач: Перегляд, пошук, AI Chat (read-only).
   - Адмін: Імпорт, видалення воркфлоу, управління GitHub репозиторіями, пакетний AI-аналіз.
@@ -133,6 +137,12 @@ graph TD
 | `get_github_repos()` | Список репо |
 | `update_repo_sync(url, count)` | Оновити дату синхронізації |
 | `delete_github_repo(id)` | Видалити репо + його воркфлоу |
+| `upsert_user(email, ...)` | Створити або оновити користувача при вході |
+| `get_user_usage(user_id)` | Отримати кількість AI-пошуків та статус підписки |
+| `increment_user_usage(user_id)` | Збільшити лічильник AI-пошуків |
+| `get_payment_history(user_id)` | Отримати історію транзакцій |
+| `update_subscription(...)` | Оновити статус підписки (WayForPay) |
+| `add_payment_record(...)` | Додати запис про платіж |
 
 ### importer.py
 
@@ -190,10 +200,13 @@ graph TD
 | `DELETE /api/repos/{id}` | DELETE | Видалити репо (auth) |
 | `POST /api/analyze/{id}` | POST | AI-аналіз одного (auth) |
 | `POST /api/analyze/batch` | POST | AI-аналіз партією (auth) |
-| `POST /api/chat` | POST | AI Chat Search |
+| `POST /api/chat` | POST | AI Chat Search (ліміт: 3 безкоштовні для user) |
 | `GET /api/auth/google/login` | GET | Ініціація Google OAuth |
 | `GET /api/auth/google/callback`| GET | Коллбек від Google (auth success) |
-| `GET /api/auth/me` | GET | Поточний користувач (ім'я, email, аватар, is_admin) |
+| `GET /api/auth/me` | GET | Поточний користувач (avatar, email, usage data, sub status) |
+| `POST /api/payments/create-order` | POST | Створення параметрів для WayForPay |
+| `POST /api/payments/callback` | POST | Webhook для WayForPay (ServiceUrl) |
+| `GET /api/payments/history` | GET | Історія платежів користувача |
 | `POST /api/admin/analyze-all` | POST | Аналізувати все AI (admin only) |
 | `POST /api/admin/clear-all` | POST | Повне очищення БД (admin only) |
 | `GET /api/filters` | GET | Списки нод та категорій |
@@ -233,6 +246,9 @@ graph TD
 | `GEMINI_MODEL` | `models/gemini-flash-latest` | Модель Gemini для аналізу. **Увага**: `gemini-3-flash` free tier = 20 запитів/день! Рекомендовано `models/gemini-2.0-flash` (1500/день) |
 | `GOOGLE_CLIENT_ID` | `""` | Google OAuth Client ID |
 | `GOOGLE_CLIENT_SECRET` | `""` | Google OAuth Client Secret |
+| `WFP_MERCHANT_ACCOUNT` | `""` | Логін мерчанта у WayForPay. |
+| `WFP_MERCHANT_SECRET_KEY` | `""` | Секретний ключ мерчанта. |
+| `WFP_MERCHANT_DOMAIN` | `""` | Домен сайту (наприклад, `https://n8n-hub.com`). |
 | `PYTHONUNBUFFERED` | `1` | Рекомендовано для логів |
 
 ---
@@ -317,6 +333,26 @@ GITHUB_TOKEN=<ваш GitHub PAT token>
    - `doClearAllWorkflows()` — повне видалення бази.
    - `doAnalyzeAllUnanalyzed()` — масовий аналіз через Gemini.
 3. **UI для адміна**: Окремий розділ у модалці репозиторіїв з "червоними" кнопками.
+
+---
+
+### Фаза 16 — Користувачі та Ліміти на AI-пошук (завершена)
+
+1. **Персистентність користувачів**: Додано таблицю `users`. Тепер Google OAuth не просто ідентифікує користувача, а зберігає його в базі.
+2. **Ліміти (Usage Tracking)**: Таблиця `user_usage` відстежує кількість викликів `/api/chat`.
+3. **Обмеження 3 пошуків**: Безкоштовні користувачі мають ліміт у 3 AI-запити. Після досягнення ліміту `/api/chat` повертає `403 Forbidden` з інформацією про апгрейд.
+4. **Універсальний Pro Status**: Реалізовано логіку перевірки `sub_status == 'active'` для ігнорування лімітів.
+5. **UI Монетизації**: Додано модальне вікно "Upgrade to Pro", лічильник пошуків у чаті та статус PRO у профілі.
+
+---
+
+### Фаза 17 — Інтеграція WayForPay (завершена)
+
+1. **Платіжний шлюз**: Обрано WayForPay як локальне та глобальне рішення (замість Stripe для кращої підтримки в Україні).
+2. **Order Creation**: Ендпоінт `/api/payments/create-order` генерує параметри та підпис (HMAC-MD5) для форми оплати.
+3. **Callback Handling**: Ендпоінт `/api/payments/callback` приймає `ServiceUrl` запити від WayForPay для активації підписки.
+4. **Subscription Lifecycle**: Автоматичне оновлення статусу в БД при успішній оплаті.
+5. **UI**: Динамічна форма оплати в `index.html`, відображення ціни в грн (40 грн/міс).
 
 ---
 
