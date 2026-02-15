@@ -1816,6 +1816,7 @@
         userTableUsage: "AI Пошуки",
         userTableTotal: "Всього:",
         userTablePro: "PRO:",
+        userTableEmpty: "Користувачів поки немає",
         processing: "Обробка...",
         completed: "Завершено",
         statusOk: "OK",
@@ -1994,6 +1995,7 @@
         userTableUsage: "AI Usage",
         userTableTotal: "Total:",
         userTablePro: "PRO:",
+        userTableEmpty: "No users found",
         processing: "Processing...",
         completed: "Completed",
         statusOk: "OK",
@@ -3006,6 +3008,12 @@
         const r = await fetch('/api/admin/users');
         const data = await r.json();
         list.innerHTML = '';
+        if (!data || data.length === 0) {
+          list.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted)" data-i18n="userTableEmpty">${i18n[currentLang].userTableEmpty}</td></tr>`;
+          document.getElementById('adminTotalUsers').textContent = '0';
+          document.getElementById('adminProUsers').textContent = '0';
+          return;
+        }
         let proCount = 0;
         data.forEach(u => {
           if (u.sub_status === 'active') proCount++;

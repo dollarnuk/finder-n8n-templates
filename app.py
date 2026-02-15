@@ -213,19 +213,23 @@ async def api_auth_me(request: Request):
     if not user:
         return JSONResponse({"authenticated": False})
     
-    # Auto-migrate legacy sessions (users who logged in before Phase 16)
-    if 'id' not in user and user.get('email'):
+    # Aggressive auto-migrate/sync user session to database
+    email = user.get('email')
+    if email:
         try:
+            # We always try to upsert to ensure user exists in the current DB file
             user_id = upsert_user(
-                email=user['email'],
-                name=user.get('name', user['email'].split('@')[0]),
+                email=email,
+                name=user.get('name', email.split('@')[0]),
                 picture=user.get('picture', '')
             )
-            user['id'] = user_id
-            request.session['user'] = user  # Update session object
-            logger.info(f"Auto-migrated legacy session for {user['email']} -> ID {user_id}")
+            # Sync session if ID changed or was missing
+            if user.get('id') != user_id:
+                user['id'] = user_id
+                request.session['user'] = user
+                logger.info(f"Synchronized session for {email} to database ID {user_id}")
         except Exception as e:
-            logger.error(f"Failed to auto-migrate session for {user['email']}: {e}")
+            logger.error(f"Failed to sync user session for {email}: {e}")
 
     user_id = user.get("id")
     usage = get_user_usage(user_id) if user_id else {"ai_chat_count": 0, "sub_status": "inactive"}

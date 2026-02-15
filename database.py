@@ -4,7 +4,8 @@ import os
 import threading
 from datetime import datetime
 
-DB_PATH = os.environ.get("DB_PATH", "./workflows.db")
+DB_PATH = os.path.abspath(os.environ.get("DB_PATH", "./workflows.db"))
+print(f"[DB] Using database at: {DB_PATH}")
 
 _local = threading.local()
 
