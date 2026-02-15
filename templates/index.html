@@ -1815,7 +1815,10 @@
               ${is_admin ? `<button class="btn btn-sm" onclick="openModal('reposModal');loadRepos()" data-i18n="reposBtn">${i18n[currentLang].reposBtn}</button>` : ''}
               <div class="user-profile">
                 <img src="${data.user.picture}" class="user-avatar" alt="Avatar">
-                <span style="font-size:13px;font-weight:600">${esc(data.user.name)}</span>
+                <div style="display:flex;flex-direction:column;gap:1px">
+                  <span style="font-size:12px;font-weight:700;line-height:1.2">${esc(data.user.name)}</span>
+                  <span style="font-size:10px;color:var(--text-dim);line-height:1">${esc(data.user.email)}</span>
+                </div>
                 <button class="btn btn-ghost" onclick="doLogout()" style="padding:4px 8px; font-size:12px" data-i18n="toastLogoutSuccess">${i18n[currentLang].toastLogoutSuccess}</button>
               </div>
             </div>
@@ -1977,8 +1980,8 @@
             const cls = wf.ai_usefulness >= 7 ? 'high' : wf.ai_usefulness >= 4 ? 'medium' : 'low';
             scoreHtml = `<span class="wf-score ${cls}">⭐ ${wf.ai_usefulness}</span>`;
           }
-          const summary = currentLang === 'en' && wf.ai_summary_en ? wf.ai_summary_en : wf.ai_summary;
-          const description = currentLang === 'en' && wf.description_en ? wf.description_en : wf.description;
+          const hasEn = !!wf.ai_summary_en;
+          const summary = currentLang === 'en' ? (hasEn ? wf.ai_summary_en : `<span style="color:var(--accent2);opacity:0.7">⚠️ Needs AI Analysis (EN)...</span>`) : (wf.ai_summary || wf.description);
 
           return `
       <div class="wf-card" onclick="openDetail(${wf.id})">
@@ -1989,7 +1992,7 @@
             <span class="wf-trigger" data-type="${wf.trigger_type}">${wf.trigger_type}</span>
           </div>
         </div>
-        ${summary ? `<div class="wf-desc">${esc(summary)}</div>` : `<div class="wf-desc">${esc(description)}</div>`}
+        <div class="wf-desc">${currentLang === 'en' && !hasEn ? summary : esc(summary)}</div>
         <div class="wf-meta">
           ${(Array.isArray(wf.categories) ? wf.categories : []).map(c => `<span class="wf-cat">${esc(c)}</span>`).join('')}
         </div>
@@ -2037,14 +2040,15 @@
         const wf = await r.json();
         document.getElementById('detailTitle').textContent = wf.name;
 
-        const summary = currentLang === 'en' && wf.ai_summary_en ? wf.ai_summary_en : wf.ai_summary;
-        const description = currentLang === 'en' && wf.description_en ? wf.description_en : wf.description;
-        const useCases = currentLang === 'en' && wf.ai_use_cases_en ? JSON.parse(wf.ai_use_cases_en || '[]') : JSON.parse(wf.ai_use_cases || '[]');
-        const integrationsSummary = currentLang === 'en' && wf.ai_integrations_summary_en ? wf.ai_integrations_summary_en : wf.ai_integrations_summary;
-        const targetAudience = currentLang === 'en' && wf.ai_target_audience_en ? wf.ai_target_audience_en : wf.ai_target_audience;
+        const hasEn = !!wf.ai_summary_en;
+        const summary = currentLang === 'en' ? (hasEn ? wf.ai_summary_en : `<span style="color:var(--accent2)">⚠️ Analysis pending for English version.</span>`) : (wf.ai_summary || wf.description);
+        const description = wf.description; // Usually we show summary, but keep description as data
+        const useCases = currentLang === 'en' ? (hasEn ? JSON.parse(wf.ai_use_cases_en || '[]') : []) : JSON.parse(wf.ai_use_cases || '[]');
+        const integrationsSummary = currentLang === 'en' ? (hasEn ? wf.ai_integrations_summary_en : '') : wf.ai_integrations_summary;
+        const targetAudience = currentLang === 'en' ? (hasEn ? wf.ai_target_audience_en : '') : wf.ai_target_audience;
 
         document.getElementById('detailBody').innerHTML = `
-      ${summary ? `<div class="ai-summary">🤖 <strong>AI:</strong> ${esc(summary)}</div>` : ''}
+      <div class="ai-summary">🤖 <strong>AI:</strong> ${currentLang === 'en' && !hasEn ? summary : esc(summary)}</div>
       ${wf.ai_usefulness > 0 ? `
       <div class="detail-section">
         <h3>${i18n[currentLang].aiAnalysisSection}</h3>

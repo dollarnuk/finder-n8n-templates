@@ -181,6 +181,17 @@ async def google_auth_callback(request: Request):
     except Exception as e:
         logger.error(f"OAuth error: {e}")
         return HTMLResponse(f"<script>alert('Помилка входу: {str(e)}'); window.close();</script>")
+@app.get("/api/auth/me")
+async def api_auth_me(request: Request):
+    user = request.session.get("user")
+    if not user:
+        return JSONResponse({"authenticated": False})
+    
+    return JSONResponse({
+        "authenticated": True,
+        "user": user,
+        "is_admin": is_admin(request)
+    })
 
 
 @app.post("/api/login")
@@ -200,7 +211,7 @@ async def logout(request: Request):
 
 @app.get("/api/search")
 async def api_search(q: str = "", category: str = "", node: str = "", page: int = 1,
-                     sort: str = "recent", min_score: int = 0):
+                     sort: str = "recent", min_score: int = 0, lang: str = "uk"):
     results = search_workflows(query=q, category=category, node=node, page=page,
                                sort=sort, min_score=min_score)
     for wf in results["workflows"]:

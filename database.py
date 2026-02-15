@@ -285,7 +285,8 @@ def search_workflows(query="", category="", node="", page=1, per_page=24,
         SELECT w.id, w.name, w.description, w.nodes, w.categories, w.node_count,
                w.trigger_type, w.source_url, w.source_repo, w.added_at,
                w.ai_usefulness, w.ai_complexity, w.ai_summary,
-               w.ai_use_cases, w.ai_target_audience, w.ai_integrations_summary, w.ai_difficulty_level
+               w.ai_use_cases, w.ai_target_audience, w.ai_integrations_summary, w.ai_difficulty_level,
+               w.ai_summary_en, w.ai_use_cases_en, w.ai_target_audience_en, w.ai_integrations_summary_en
         FROM workflows w {where}
         ORDER BY {order_by}
         LIMIT ? OFFSET ?
