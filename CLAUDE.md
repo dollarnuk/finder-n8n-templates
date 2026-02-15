@@ -89,7 +89,7 @@ graph TD
 
 | Таблиця | Призначення |
 |---|---|
-| `workflows` | Основна: id, name, description, nodes (JSON), categories (JSON), node_count, trigger_type, source_url, source_repo, json_content, json_hash (UNIQUE), added_at, updated_at, ai_usefulness, ai_universality, ai_complexity, ai_scalability, ai_summary, ai_tags (JSON), ai_analyzed_at |
+| `workflows` | Основна: id, name, description, nodes (JSON), categories (JSON), node_count, trigger_type, source_url, source_repo, json_content, json_hash (UNIQUE), added_at, updated_at, ai_usefulness, ai_universality, ai_complexity, ai_scalability, ai_summary, ai_tags (JSON), ai_analyzed_at, ai_use_cases (JSON), ai_target_audience, ai_integrations_summary, ai_difficulty_level |
 | `github_repos` | Зареєстровані GitHub репо для авто-синхронізації: id, repo_url (UNIQUE), last_synced, workflow_count, enabled |
 | `workflow_nodes` | Lookup: workflow_id + node_name (для O(1) фільтрів) |
 | `workflow_categories` | Lookup: workflow_id + category_name (для O(1) фільтрів) |
@@ -288,81 +288,20 @@ GITHUB_TOKEN=<ваш GitHub PAT token>
 
 ---
 
-## ЩО ПОТРІБНО ЗРОБИТИ ДАЛІ (Фаза 4 — ПРІОРИТЕТ)
+### Фаза 4 — AI-аналіз ПРИ ІМПОРТІ, Валідація та UI (завершена)
 
-### Контекст від власника
-
-Власник вирішив **змінити підхід**: замість автоімпорту з GitHub через INITIAL_REPOS, він хоче **імпортувати воркфлоу вручну через сайт**. Воркфлоу зберігаються на Google Drive, відсортовані по папках. Власник буде імпортувати їх сам через інтерфейс.
-
-### 4.1 — AI-аналіз ПРИ ІМПОРТІ (ГОЛОВНЕ)
-
-**Зараз**: імпорт і аналіз — два окремих кроки. Спершу імпортуєш, потім натискаєш "Аналізувати AI".
-
-**Потрібно**: При імпорті кожного воркфлоу **автоматично**:
-1. Валідація JSON (чи це справжній n8n workflow)
-2. Якщо воркфлоу без назви або назва "Без назви" → AI генерує розумну назву
-3. AI генерує детальний опис (summary) українською
-4. AI оцінює usefulness/universality/complexity/scalability
-5. AI генерує теги для пошуку
-6. Дедуплікація (json_hash) — пропускає дублікати
-
-**Реалізація**: Модифікувати `import_from_json()` та `import_from_url()` щоб після вставки в БД одразу викликали `analyze_and_save()`. Для batch-імпорту — аналізувати кожен воркфлоу з паузою 1с (rate limit Gemini free tier). Показувати прогрес.
-
-### 4.2 — Розширений AI-аналіз
-
-**Поточний промпт** в `analyzer.py` дає 4 оцінки + summary + tags.
-
-**Потрібно додати в промпт** для кращого AI-пошуку:
-- **use_cases** (список) — конкретні бізнес-сценарії, для яких підходить workflow
-- **target_audience** — для кого (маркетологи, розробники, sales, HR тощо)
-- **integrations_summary** — людський опис інтеграцій ("з'єднує Telegram з Google Sheets")
-- **difficulty_level** — "beginner" / "intermediate" / "advanced"
-
-**Реалізація**:
-1. Додати нові колонки в `workflows` таблицю (міграція в `_migrate_ai_columns`)
-2. Оновити `ANALYSIS_PROMPT` в `analyzer.py`
-3. Оновити `update_workflow_ai()` в `database.py`
-4. Оновити FTS5 контент для пошуку по нових полях
-5. Оновити UI (картки, деталі)
-
-### 4.3 — Валідація воркфлоу
-
-**Зараз**: `parse_workflow_json()` перевіряє тільки що JSON валідний.
-
-**Потрібно**:
-- Перевірити наявність ключового поля `nodes` (масив)
-- Перевірити що хоча б одна нода є
-- Відхиляти файли менше ~50 байт
-- Повертати зрозуміле повідомлення при невалідному файлі
-
-### 4.4 — Покращення UI імпорту
-
-**Зараз**: 3 таби (URL, JSON, File) — простий інтерфейс.
-
-**Потрібно**:
-- **Multi-file upload**: drag-and-drop зона для кількох JSON файлів одночасно
-- **Прогрес-бар**: показувати скільки з N файлів імпортовано / аналізовано
-- **Результат імпорту**: таблиця з назвами, статусами (imported / duplicate / error / analyzing)
-- **SSE (Server-Sent Events)** для real-time прогресу batch-імпорту
-
-### 4.5 — Google Drive підтримка (опціонально)
-
-Якщо власник хоче імпортувати з Google Drive напряму:
-- Google Drive public link → parse file ID → download JSON → import
-- Або: папка Google Drive → list files → download кожен → batch import
-- Потребує Google API або public sharing links
-
-### 4.6 — Покращення пошуку
-
-- **Searchable dropdowns** для фільтрів (при 400+ нодах select непрактичний)
-- Пошук по новим AI-полям (use_cases, target_audience)
-- Фільтр по difficulty_level
+1. **AI-аналіз при імпорті**: Тепер `import_from_json()` та `import_from_url()` автоматично викликають `analyze_and_save()`, якщо передано `analyze=True`.
+2. **Розширені метадані**: Додано поля `ai_use_cases`, `ai_target_audience`, `ai_integrations_summary`, `ai_difficulty_level`. Промпт в `analyzer.py` оновлено для їх генерації.
+3. **Сувора валідація**: `parse_workflow_json()` тепер перевіряє структуру n8n (наявність `nodes`), мінімальний розмір файлу та валідність JSON.
+4. **Покращений UI**: 
+   - Підтримка Multi-file upload та Drag & Drop.
+   - Прогрес-бар для пакетного імпорту.
+   - Таблиця результатів зі статусами (OK, Дублікат, Помилка).
+   - Відображення нових AI-даних у модальному вікні деталей.
 
 ---
 
-## Майбутні плани власника
-
-### Монетизація (Фаза 5)
+### Що потрібно зробити далі (Фаза 5 — Монетизація та Реліз)
 - Підписочна модель: $1-5/місяць
 - Безкоштовний доступ: перегляд, базовий пошук
 - Платний: AI-пошук, завантаження JSON, instant import, доступ до всієї бази
