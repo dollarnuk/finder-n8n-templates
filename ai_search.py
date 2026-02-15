@@ -14,7 +14,7 @@ from database import get_all_nodes, get_all_categories, search_workflows
 logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "models/gemini-flash-latest")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "models/gemini-1.5-flash")
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY, transport="rest")
@@ -89,11 +89,15 @@ async def translate_query(user_query: str) -> dict:
 
     except Exception as e:
         logger.error(f"AI Chat Search error: {e}")
+        error_msg = str(e)
+        if "quota" in error_msg.lower() or "429" in error_msg:
+             error_msg = "Ви вичерпали ліміт запитів Gemini (стандартно 20/день для нових акаунтів або перевантаження). Спробуйте пізніше."
+        
         return {
             "fts_query": user_query,
             "category": "",
             "node": "",
-            "explanation": f"Помилка AI: {str(e)}. Використовую звичайний пошук."
+            "explanation": f"Помилка AI: {error_msg}. Використовую звичайний пошук."
         }
 
 async def perform_ai_search(query: str, page: int = 1):

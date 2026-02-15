@@ -15,7 +15,7 @@ from database import update_workflow_ai, get_unanalyzed_workflows, get_workflow
 logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "models/gemini-flash-latest")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "models/gemini-1.5-flash")
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY, transport="rest")
