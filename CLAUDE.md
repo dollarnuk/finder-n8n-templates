@@ -243,7 +243,7 @@ graph TD
 | `GITHUB_TOKEN` | `""` | GitHub Personal Access Token (для збільшення rate limit) |
 | `SYNC_INTERVAL_HOURS` | `24` | Інтервал автосинхронізації GitHub репо (годин) |
 | `GEMINI_API_KEY` | `""` | Google AI (Gemini) API Key |
-| `GEMINI_MODEL` | `models/gemini-flash-latest` | Модель Gemini для аналізу. **Увага**: `gemini-3-flash` free tier = 20 запитів/день! Рекомендовано `models/gemini-2.0-flash` (1500/день) |
+| `GEMINI_MODEL` | `models/gemini-1.5-flash` | `gemini-1.5-flash` (швидко, 1500/день) або `gemini-1.5-pro` (вища точність, ліміт 50/день) |
 | `GOOGLE_CLIENT_ID` | `""` | Google OAuth Client ID |
 | `GOOGLE_CLIENT_SECRET` | `""` | Google OAuth Client Secret |
 | `WFP_MERCHANT_ACCOUNT` | `""` | Логін мерчанта у WayForPay. |

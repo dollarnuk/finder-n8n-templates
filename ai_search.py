@@ -91,7 +91,7 @@ async def translate_query(user_query: str) -> dict:
         logger.error(f"AI Chat Search error: {e}")
         error_msg = str(e)
         if "quota" in error_msg.lower() or "429" in error_msg:
-             error_msg = "Ви вичерпали ліміт запитів Gemini (стандартно 20/день для нових акаунтів або перевантаження). Спробуйте пізніше."
+             error_msg = "Ліміт запитів Gemini Pro вичерпано (2 на хвилину). Спробуйте через 60 секунд."
         
         return {
             "fts_query": user_query,
