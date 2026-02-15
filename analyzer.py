@@ -31,6 +31,7 @@ analysis_status = {
     "errors": 0,
     "start_time": None
 }
+analysis_lock = asyncio.Lock()
 
 ANALYSIS_PROMPT = """Ти — експерт з n8n автоматизацій. Проаналізуй цей workflow та дай структуровану відповідь у JSON ДВОМА МОВАМИ (українською та англійською).
 
@@ -225,60 +226,38 @@ async def analyze_batch(limit: int = 50) -> dict:
     if not OPENAI_API_KEY:
         return {"error": "OPENAI_API_KEY not configured"}
 
-    workflows = get_unanalyzed_workflows(limit)
-    if not workflows:
-        analysis_status["status"] = "idle"
-        return {"status": "ok", "message": "All workflows already analyzed", "analyzed": 0}
+    async with analysis_lock:
+        workflows = get_unanalyzed_workflows(limit)
+        if not workflows:
+            analysis_status["status"] = "idle"
+            return {"status": "ok", "message": "All workflows already analyzed", "analyzed": 0}
 
-    from datetime import datetime
-    analysis_status.update({
-        "status": "running",
-        "total": len(workflows),
-        "analyzed": 0,
-        "errors": 0,
-        "start_time": datetime.utcnow().isoformat()
-    })
+        from datetime import datetime
+        analysis_status.update({
+            "status": "running",
+            "total": len(workflows),
+            "analyzed": 0,
+            "errors": 0,
+            "start_time": datetime.utcnow().isoformat()
+        })
 
-    analyzed = 0
-    errors = 0
-    error_details = []
+        analyzed = 0
+        errors = 0
+        error_details = []
 
-    try:
-        for wf in workflows:
-            # Parse nodes/categories
-            wf_data = {
-                "id": wf["id"],
-                "name": wf["name"],
-                "description": wf["description"],
-                "nodes": json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"],
-                "categories": json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"],
-                "node_count": wf["node_count"],
-                "trigger_type": wf["trigger_type"],
-            }
+        try:
+            for wf in workflows:
+                # Parse nodes/categories
+                wf_data = {
+                    "id": wf["id"],
+                    "name": wf["name"],
+                    "description": wf["description"],
+                    "nodes": json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"],
+                    "categories": json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"],
+                    "node_count": wf["node_count"],
+                    "trigger_type": wf["trigger_type"],
+                }
 
-            result = await analyze_workflow(wf_data)
-            if result:
-                update_workflow_ai(
-                    wf["id"],
-                    usefulness=result.get("usefulness", 5),
-                    universality=result.get("universality", 5),
-                    complexity=result.get("complexity", 5),
-                    scalability=result.get("scalability", 5),
-                    summary=result.get("uk", {}).get("summary", ""),
-                    tags=result.get("tags", []),
-                    use_cases=result.get("uk", {}).get("use_cases", []),
-                    target_audience=result.get("uk", {}).get("target_audience", ""),
-                    integrations_summary=result.get("uk", {}).get("integrations_summary", ""),
-                    difficulty_level=result.get("difficulty_level", "intermediate"),
-                    result_en=result.get("en", {})
-                )
-                analyzed += 1
-                analysis_status["analyzed"] = analyzed
-                logger.info(f"Analyzed {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
-            else:
-                # Retry once after a longer pause (likely rate limit)
-                logger.warning(f"First attempt failed for {wf['id']}: {wf['name'][:50]}, retrying in 10s...")
-                await asyncio.sleep(10.0)
                 result = await analyze_workflow(wf_data)
                 if result:
                     update_workflow_ai(
@@ -297,23 +276,46 @@ async def analyze_batch(limit: int = 50) -> dict:
                     )
                     analyzed += 1
                     analysis_status["analyzed"] = analyzed
-                    logger.info(f"Retry OK {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
+                    logger.info(f"Analyzed {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
                 else:
-                    errors += 1
-                    analysis_status["errors"] = errors
-                    error_details.append({"id": wf["id"], "name": wf["name"][:60]})
-                    logger.warning(f"Failed to analyze workflow {wf['id']}: {wf['name'][:50]}")
+                    # Retry once after a longer pause (likely rate limit)
+                    logger.warning(f"First attempt failed for {wf['id']}: {wf['name'][:50]}, retrying in 10s...")
+                    await asyncio.sleep(10.0)
+                    result = await analyze_workflow(wf_data)
+                    if result:
+                        update_workflow_ai(
+                            wf["id"],
+                            usefulness=result.get("usefulness", 5),
+                            universality=result.get("universality", 5),
+                            complexity=result.get("complexity", 5),
+                            scalability=result.get("scalability", 5),
+                            summary=result.get("uk", {}).get("summary", ""),
+                            tags=result.get("tags", []),
+                            use_cases=result.get("uk", {}).get("use_cases", []),
+                            target_audience=result.get("uk", {}).get("target_audience", ""),
+                            integrations_summary=result.get("uk", {}).get("integrations_summary", ""),
+                            difficulty_level=result.get("difficulty_level", "intermediate"),
+                            result_en=result.get("en", {})
+                        )
+                        analyzed += 1
+                        analysis_status["analyzed"] = analyzed
+                        logger.info(f"Retry OK {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
+                    else:
+                        errors += 1
+                        analysis_status["errors"] = errors
+                        error_details.append({"id": wf["id"], "name": wf["name"][:60]})
+                        logger.warning(f"Failed to analyze workflow {wf['id']}: {wf['name'][:50]}")
 
-            # Rate limiting: OpenAI gpt-4o-mini usually has higher limits.
-            # Still a small pause is good for stability.
-            await asyncio.sleep(0.5)
-    finally:
-        analysis_status["status"] = "idle"
+                # Rate limiting: OpenAI gpt-4o-mini usually has higher limits.
+                # Still a small pause is good for stability.
+                await asyncio.sleep(0.5)
+        finally:
+            analysis_status["status"] = "idle"
 
-    return {
-        "status": "ok",
-        "analyzed": analyzed,
-        "errors": errors,
-        "remaining": len(get_unanalyzed_workflows(1)),
-        "error_details": error_details,
-    }
+        return {
+            "status": "ok",
+            "analyzed": analyzed,
+            "errors": errors,
+            "remaining": len(get_unanalyzed_workflows(1)),
+            "error_details": error_details,
+        }

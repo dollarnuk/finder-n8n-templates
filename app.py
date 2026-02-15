@@ -21,7 +21,7 @@ from database import init_db, search_workflows, get_workflow, delete_workflow, \
     update_subscription, add_payment_record, get_payment_history, get_user_by_payment_customer
 from importer import import_from_json, import_from_url, import_from_directory, \
     sync_github_repo, sync_all_repos
-from analyzer import analyze_and_save, analyze_batch, analysis_status
+from analyzer import analyze_and_save, analyze_batch, analysis_status, analysis_lock
 from ai_search import perform_ai_search
 import hashlib
 import hmac
@@ -584,20 +584,27 @@ async def api_admin_clear_all(request: Request):
 
 
 @app.post("/api/admin/analyze-all")
-async def api_admin_analyze_all(request: Request):
+async def api_admin_analyze_all(request: Request, background_tasks: BackgroundTasks):
     require_auth(request, admin_only=True)
     try:
-        # High limit to analyze everything unanalyzed
-        result = await analyze_batch(limit=1000)
-        return JSONResponse(result)
+        # Run in background to prevent timeout
+        background_tasks.add_task(analyze_batch, limit=1000)
+        return JSONResponse({"status": "ok", "message": "Фоновий аналіз запущено"})
     except Exception as e:
         logger.error(f"Analyze all error: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+        return JSONResponse({"status": "error", "message": "Внутрішня помилка сервера"}, status_code=500)
 @app.get("/api/admin/analysis-status")
 async def api_admin_analysis_status(request: Request):
     require_auth(request, admin_only=True)
+    
+    # Force 'running' status if lock is held, even if batch is just starting/finishing
+    current_status = analysis_status["status"]
+    if analysis_lock.locked():
+        current_status = "running"
+        
     return JSONResponse({
         **analysis_status,
+        "status": current_status,
         "total_unanalyzed": get_stats()["total_workflows"] - get_stats()["analyzed_count"]
     })
 
