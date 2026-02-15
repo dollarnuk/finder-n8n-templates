@@ -15,7 +15,7 @@ RUN mkdir -p /data
 # Environment defaults
 ENV PYTHONUNBUFFERED=1
 ENV DB_PATH=/data/workflows.db
-ENV LOCAL_WORKFLOWS_DIR="/app/data/workflows"
+ENV LOCAL_WORKFLOWS_DIR=""
 ENV ADMIN_USER=admin
 ENV ADMIN_PASS=changeme
 ENV SECRET_KEY=change-this-to-random-string
