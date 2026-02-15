@@ -953,28 +953,19 @@
       gap: 6px;
     }
 
-    /* ===== AI Progress Widget ===== */
+    /* ===== AI Progress Widget (In Modal) ===== */
     .ai-progress-widget {
-      position: fixed;
-      bottom: 100px;
-      right: 30px;
-      z-index: 140;
-      width: 280px;
-      background: var(--bg-surface);
+      margin-top: 25px;
+      background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius);
       padding: 16px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-      transform: translateY(20px);
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      display: none;
+      /* Hidden by default */
     }
 
     .ai-progress-widget.active {
-      transform: translateY(0);
-      opacity: 1;
-      visibility: visible;
+      display: block;
     }
 
     .ai-progress-header {
@@ -998,21 +989,21 @@
       height: 8px;
       background: var(--accent);
       border-radius: 50%;
-      box-shadow: 0 0 0 var(--accent-glow);
+      box-shadow: 0 0 0 rgba(79, 70, 229, 0.4);
       animation: aiPulse 1.5s infinite;
     }
 
     @keyframes aiPulse {
       0% {
-        box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7);
+        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
       }
 
       70% {
-        box-shadow: 0 0 0 10px rgba(79, 70, 229, 0);
+        box-shadow: 0 0 0 10px rgba(249, 115, 22, 0);
       }
 
       100% {
-        box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
       }
     }
 
@@ -1563,6 +1554,24 @@
             </div>
           </div>
         </div>
+
+        <!-- AI Progress Indicator (integrated here) -->
+        <div class="ai-progress-widget" id="aiProgressWidget">
+          <div class="ai-progress-header">
+            <div class="ai-progress-title">
+              <div class="ai-progress-pulse"></div>
+              <span data-i18n="aiProgressTitle">AI Аналіз у фоні</span>
+            </div>
+            <div class="ai-progress-info" style="font-weight:600" id="aiProgressCount">0/0</div>
+          </div>
+          <div class="ai-progress-bar-bg">
+            <div class="ai-progress-bar-fill" id="aiProgressFill"></div>
+          </div>
+          <div class="ai-progress-info">
+            <span data-i18n="aiProgressRunning">Обробка воркфлоу...</span>
+          </div>
+          <div class="ai-progress-error" id="aiProgressErrorTip"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1696,8 +1705,9 @@
     // ===== State =====
     let currentPage = 1;
     let searchTimeout = null;
-
     let currentLang = localStorage.getItem('hub_lang') || 'uk';
+    let authenticated = false;
+    let is_admin = false;
 
     const i18n = {
       uk: {
@@ -2064,22 +2074,22 @@
         triggerType: "Trigger Type",
         source: "Source",
         json: "JSON",
-        downloadJson: "⬇ Download JSON",
-        copyJson: "📋 Copy JSON",
-        copyN8nUrl: "🔗 URL for n8n",
-        delete: "🗑 Delete",
+        downloadJson: "⬇ Завантажити JSON",
+        copyJson: "📋 Копіювати JSON",
+        copyN8nUrl: "🔗 URL для n8n",
+        delete: "🗑 Видалити",
         usefulnessScore: "Usefulness",
         universalityScore: "Universality",
         complexityScore: "Complexity",
         scalabilityScore: "Scalability",
-        workflow: "Workflow",
-        workflowDetails: "Workflow Details",
+        workflow: "Воркфлоу",
+        workflowDetails: "Деталі воркфлоу",
         workflowTrigger: "Workflow",
         githubRepo: "GitHub Repo",
-        aiProgressTitle: "AI Analysis in Background",
-        aiProgressRunning: "Processing workflows...",
-        aiProgressIdle: "Waiting...",
-        aiProgressError: "Errors: {count}"
+        aiProgressTitle: "AI Аналіз у фоні",
+        aiProgressRunning: "Обробка воркфлоу...",
+        aiProgressIdle: "Очікування...",
+        aiProgressError: "Помилки: {count}"
       }
     };
 
@@ -2129,7 +2139,6 @@
       updateUI();
       loadStats();
       doSearch();
-      if (is_admin) startStatusPolling();
 
       // Handle payment redirect results
       const params = new URLSearchParams(window.location.search);
@@ -2149,6 +2158,10 @@
         const data = await r.json();
         authenticated = data.authenticated;
         is_admin = data.is_admin;
+
+        if (is_admin) {
+          startStatusPolling();
+        }
         const section = document.getElementById('authSection');
         if (data.authenticated) {
           authenticated = true;
@@ -3051,26 +3064,6 @@
       }
     }
   </script>
-  <!-- AI Progress Widget (Floating) -->
-  <div class="ai-progress-widget" id="aiProgressWidget">
-    <div class="ai-progress-header">
-      <div class="ai-progress-title">
-        <div class="ai-progress-pulse"></div>
-        <span data-i18n="aiProgressTitle">AI Аналіз у фоні</span>
-      </div>
-      <div class="ai-progress-info" style="font-weight:600" id="aiProgressCount">0/0</div>
-    </div>
-    <div class="ai-progress-bar-fill-container"
-      style="height: 6px; background: var(--bg-card); border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
-      <div class="ai-progress-bar-fill" id="aiProgressFill"
-        style="height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.5s ease;">
-      </div>
-    </div>
-    <div class="ai-progress-info">
-      <span data-i18n="aiProgressRunning">Обробка воркфлоу...</span>
-    </div>
-    <div class="ai-progress-error" id="aiProgressErrorTip"></div>
-  </div>
 </body>
 
 </html>
