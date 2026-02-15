@@ -35,13 +35,13 @@
 ```
 d:\PROJECT\N8N Find workflows\
 ├── CLAUDE.md               ← ЦЕЙ ФАЙЛ (архітектура для AI)
-├── app.py                  ← FastAPI сервер, API routes, auth (~308 рядків)
-├── database.py             ← SQLite + FTS5, CRUD операції (~361 рядків)
+├── app.py                  ← FastAPI сервер, API routes, auth (~430 рядків)
+├── database.py             ← SQLite + FTS5, CRUD операції (~420 рядків)
 ├── importer.py             ← Парсинг JSON, імпорт з джерел (~420 рядків)
-├── analyzer.py             ← AI-аналіз воркфлоу (Gemini) (~201 рядків)
+├── analyzer.py             ← AI-аналіз воркфлоу (Gemini), retry, rate limit (~275 рядків)
 ├── ai_search.py            ← AI Chat Search (Gemini) (~129 рядків)
 ├── templates/
-│   └── index.html          ← Єдиний HTML шаблон, вся UI (~1809 рядків)
+│   └── index.html          ← Єдиний HTML шаблон, вся UI (~2500 рядків)
 ├── Dockerfile              ← Docker образ (python:3.12-slim)
 ├── docker-compose.yml      ← Docker Compose конфігурація
 ├── .dockerignore           ← Docker ігнорування
@@ -89,11 +89,11 @@ graph TD
 
 | Таблиця | Призначення |
 |---|---|
-| `workflows` | Основна: id, name, description, nodes (JSON), categories (JSON), node_count, trigger_type, source_url, source_repo, json_content, json_hash (UNIQUE), added_at, updated_at, ai_usefulness, ai_universality, ai_complexity, ai_scalability, ai_summary, ai_tags (JSON), ai_analyzed_at, ai_use_cases (JSON), ai_target_audience, ai_integrations_summary, ai_difficulty_level |
+| `workflows` | Основна: id, name, description, nodes (JSON), categories (JSON), node_count, trigger_type, source_url, source_repo, json_content, json_hash (UNIQUE), added_at, updated_at, ai_usefulness, ai_universality, ai_complexity, ai_scalability, ai_summary, ai_tags (JSON), ai_analyzed_at, ai_use_cases (JSON), ai_target_audience, ai_integrations_summary, ai_difficulty_level, **ai_summary_en**, **ai_use_cases_en** (JSON), **ai_target_audience_en**, **ai_integrations_summary_en** |
 | `github_repos` | Зареєстровані GitHub репо для авто-синхронізації: id, repo_url (UNIQUE), last_synced, workflow_count, enabled |
 | `workflow_nodes` | Lookup: workflow_id + node_name (для O(1) фільтрів) |
 | `workflow_categories` | Lookup: workflow_id + category_name (для O(1) фільтрів) |
-| `workflows_fts` | FTS5 віртуальна таблиця (name, description, nodes, categories). Оновлюється тригерами |
+| `workflows_fts` | FTS5 віртуальна таблиця (name, description, nodes, categories, ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary, ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en). Оновлюється тригерами |
 
 **Важливо:** lookup-таблиці `workflow_nodes` та `workflow_categories` дублюють дані з JSON полів `nodes` і `categories` таблиці `workflows`. Це зроблено для швидких фільтрів замість O(n) парсингу JSON. При зміні nodes/categories потрібно оновлювати обидва місця.
 
@@ -126,9 +126,9 @@ graph TD
 | `delete_workflow(id)` | Видалити (CASCADE видаляє lookup + FTS) |
 | `get_all_nodes()` | `SELECT DISTINCT node_name FROM workflow_nodes` |
 | `get_all_categories()` | `SELECT DISTINCT category_name FROM workflow_categories` |
-| `get_stats()` | Кількість: workflows, repos, unique nodes, analyzed, avg_usefulness |
-| `update_workflow_ai(wf_id, ...)` | Оновити AI-аналіз для воркфлоу |
-| `get_unanalyzed_workflows(limit)` | Вибрати ще не проаналізовані |
+| `get_stats()` | Кількість: workflows, repos, unique nodes, analyzed (де `ai_usefulness > 0`), avg_usefulness |
+| `update_workflow_ai(wf_id, ..., result_en)` | Оновити AI-аналіз для воркфлоу (UK + EN) |
+| `get_unanalyzed_workflows(limit)` | Вибрати ще не проаналізовані (`ai_analyzed_at` порожній/NULL **або** `ai_usefulness = 0`) |
 | `add_github_repo(url)` | Додати репо для синхронізації |
 | `get_github_repos()` | Список репо |
 | `update_repo_sync(url, count)` | Оновити дату синхронізації |
@@ -156,9 +156,9 @@ graph TD
 
 | Функція | Опис |
 |---|---|
-| `analyze_workflow(wf)` | Аналіз одного воркфлоу через Gemini. Повертає dict зі scores та summary |
+| `analyze_workflow(wf)` | Аналіз одного воркфлоу через Gemini. Повертає dict зі scores, summary (UK+EN) та tags |
 | `analyze_and_save(wf_id)` | Аналіз + збереження в БД |
-| `analyze_batch(limit)` | Пакетний аналіз непроаналізованих воркфлоу (з паузою 1с між запитами) |
+| `analyze_batch(limit)` | Пакетний аналіз із паузою **4с** між запитами + **retry з 10с backoff**. Повертає `error_details` зі списком невдалих воркфлоу |
 
 ### ai_search.py
 
@@ -193,10 +193,11 @@ graph TD
 | `POST /api/chat` | POST | AI Chat Search |
 | `GET /api/auth/google/login` | GET | Ініціація Google OAuth |
 | `GET /api/auth/google/callback`| GET | Коллбек від Google (auth success) |
-| `POST /api/admin/analyze-all` | POST | Аналізувати всеAI (admin only) |
+| `GET /api/auth/me` | GET | Поточний користувач (ім'я, email, аватар, is_admin) |
+| `POST /api/admin/analyze-all` | POST | Аналізувати все AI (admin only) |
 | `POST /api/admin/clear-all` | POST | Повне очищення БД (admin only) |
 | `GET /api/filters` | GET | Списки нод та категорій |
-| `GET /api/stats` | GET | Статистика |
+| `GET /api/stats` | GET | Статистика (analyzed = `ai_usefulness > 0`) |
 
 ### templates/index.html
 
@@ -229,7 +230,7 @@ graph TD
 | `GITHUB_TOKEN` | `""` | GitHub Personal Access Token (для збільшення rate limit) |
 | `SYNC_INTERVAL_HOURS` | `24` | Інтервал автосинхронізації GitHub репо (годин) |
 | `GEMINI_API_KEY` | `""` | Google AI (Gemini) API Key |
-| `GEMINI_MODEL` | `models/gemini-flash-latest` | Модель Gemini для аналізу |
+| `GEMINI_MODEL` | `models/gemini-flash-latest` | Модель Gemini для аналізу. **Увага**: `gemini-3-flash` free tier = 20 запитів/день! Рекомендовано `models/gemini-2.0-flash` (1500/день) |
 | `GOOGLE_CLIENT_ID` | `""` | Google OAuth Client ID |
 | `GOOGLE_CLIENT_SECRET` | `""` | Google OAuth Client Secret |
 | `PYTHONUNBUFFERED` | `1` | Рекомендовано для логів |
@@ -251,7 +252,7 @@ graph TD
 ADMIN_PASS=<ваш пароль>
 SECRET_KEY=<ваш secret key>
 GEMINI_API_KEY=<ваш Gemini API key>
-GEMINI_MODEL=models/gemini-flash-latest
+GEMINI_MODEL=models/gemini-2.0-flash
 GITHUB_TOKEN=<ваш GitHub PAT token>
 ```
 **Реальні значення зберігаються в EasyPanel та .env (не в git).**
@@ -329,6 +330,31 @@ GITHUB_TOKEN=<ваш GitHub PAT token>
 
 ---
 
+### Фаза 8 — Мультимовність (UA + EN) (завершена)
+
+1. **Двомовний AI-аналіз**: Промпт Gemini генерує аналіз одночасно українською (`uk`) та англійською (`en`). Результати зберігаються в окремих колонках (`ai_summary_en`, `ai_use_cases_en`, `ai_target_audience_en`, `ai_integrations_summary_en`).
+2. **Перемикач мови**: UI підтримує UA/EN через `currentLang`. Якщо для воркфлоу ще немає EN-аналізу, відображається плейсхолдер "Needs AI Analysis (EN)..." замість fallback на українську.
+3. **FTS5 індексація**: Пошукова таблиця FTS5 індексує як українські, так і англійські поля для мультимовного пошуку.
+4. **API параметр `lang`**: `/api/search` приймає `lang=en|uk` для мовно-специфічних результатів.
+
+---
+
+### Фаза 11 — Bug Fixes: UI та i18n (завершена)
+
+1. **`/api/auth/me` endpoint**: Відновлення відображення Google аватара та email у header.
+2. **i18n fallback**: Виправлена логіка мовних fallback — EN-інтерфейс більше не показує український текст.
+
+---
+
+### Фаза 12 — Виправлення дискрепансії AI-аналізу (завершена)
+
+1. **Проблема**: Пакетний аналіз повідомляв "всі оброблені", але статистика показувала менше проаналізованих, ніж всього.
+2. **Причина 1**: `get_stats()` та `get_unanalyzed_workflows()` використовували різні критерії для "проаналізовано" — воркфлоу з невдалим AI-аналізом (timestamp є, оцінки = 0) зависали в "мертвій зоні".
+3. **Причина 2**: Gemini Free Tier `gemini-3-flash` має ліміт **20 запитів/день** (не на хвилину!). При аналізі 20+ воркфлоу останні завжди провалювались.
+4. **Виправлення**: Критерій "проаналізовано" = `ai_analyzed_at != '' AND ai_usefulness > 0`. Retry з 10с backoff. Пауза між запитами збільшена до 4с. Тост показує назви невдалих воркфлоу.
+
+---
+
 ### Фаза 9 — Оптимізація та фоновий AI-аналіз (Пріоритет)
 - Перенести `analyze_and_save` у `BackgroundTasks` FastAPI.
 - Пришвидшити імпорт великих GitHub репозиторіїв та Google Drive файлів.
@@ -351,7 +377,7 @@ GITHUB_TOKEN=<ваш GitHub PAT token>
 - [ ] Тегування воркфлоу (кастомні мітки)
 - [ ] Улюблені / обрані воркфлоу
 - [ ] Порівняння двох воркфлоу
-- [ ] Мультимовність (зараз тільки українська)
+- [x] Мультимовність (UA + EN, двомовний AI-аналіз)
 - [ ] Експорт колекції як ZIP
 - [ ] Статистика популярності (перегляди, завантаження)
 
@@ -417,8 +443,8 @@ docker-compose up -d --build
 7. **Gemini SDK нюанси**:
    - Використовуйте `transport="rest"` у `genai.configure()`. gRPC може зависати в деяких середовищах Windows та Docker.
    - Викликайте `model.generate_content` через `asyncio.to_thread()`, навіть якщо бібліотека має асинхронні методи. Це вирішує проблему з "awaitable properties" та неочікуваною поведінкою SDK.
-   - Бажана модель: `models/gemini-flash-latest` (або `gemini-1.5-flash`).
-   - Rate limit free tier: ~15 RPM. Використовуйте `await asyncio.sleep(1.0)` між запитами.
+   - **Рекомендована модель: `models/gemini-2.0-flash`** (1500 запитів/день free tier). `gemini-3-flash` (`gemini-flash-latest`) має лише 20 запитів/день!
+   - Пауза між запитами: `await asyncio.sleep(4.0)`. При помилці — retry через 10с.
 
 8. **AI Search (FTS5)**: `ai_search.py` конвертує запит користувача у JSON з `fts_query`. Це поле автоматично розбивається на слова з оператором `OR` для максимального покриття через FTS5.
 

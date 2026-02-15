@@ -5,13 +5,14 @@
 ## Головні можливості
 
 - **AI Chat Search** — інтелектуальний пошук природною мовою (через Gemini API).
-- **AI Workflow Analysis** — автоматична оцінка корисності, універсальності та складності.
+- **AI Workflow Analysis** — автоматична оцінка корисності, універсальності та складності (UK + EN).
 - **Миттєвий імпорт в n8n** — кнопка копіювання спеціального URL для функції `Import from URL`.
 - **Повнотекстовий пошук** — миттєвий пошук через SQLite FTS5 по назвах, описах та типах вузлів.
 - **Масовий імпорт** — підтримка GitHub репозиторіїв та локальних папок (~4200 воркфлоу за секунди).
 - **Фільтри** — категорізація за вузлами та типами тригерів.
 - **Автосинхронізація** з GitHub репозиторіями (за розкладом)
-- **Авторизація** — перегляд відкритий, редагування за логіном/паролем
+- **Мультимовність** — інтерфейс та AI-аналіз українською та англійською
+- **Авторизація** — Google OAuth, перегляд відкритий, адмін-панель для керування
 - **Адаптивний дизайн** — працює на десктопі та мобільних
 - **Docker** — один контейнер, простий деплой
 
@@ -46,20 +47,22 @@ docker compose up -d
 
 ```
 ├── CLAUDE.md               # Архітектура та інструкції для AI-асистентів
-├── app.py                  # FastAPI сервер + API роути
+├── app.py                  # FastAPI сервер + API роути + Google OAuth
 ├── database.py             # SQLite + FTS5 пошук
 ├── importer.py             # Парсинг та імпорт воркфлоу
+├── analyzer.py             # AI-аналіз воркфлоу (Gemini, retry, rate limit)
+├── ai_search.py            # AI Chat Search (Gemini)
 ├── templates/
-│   └── index.html          # Веб-інтерфейс (українською)
+│   └── index.html          # Веб-інтерфейс (UK + EN)
 ├── data/
-│   └── workflows/          # JSON файли воркфлоу (4186 шт.)
+│   └── workflows/          # JSON файли воркфлоу
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
 └── .env.example
 ```
 
-**Стек**: Python, FastAPI, SQLite FTS5, Jinja2, httpx
+**Стек**: Python, FastAPI, SQLite FTS5, Jinja2, httpx, Gemini AI
 
 > Детальна архітектура та інструкції для розробників — див. [CLAUDE.md](CLAUDE.md)
 
@@ -75,7 +78,9 @@ docker compose up -d
 | `GITHUB_TOKEN` | — | GitHub PAT (для rate limit) |
 | `SYNC_INTERVAL_HOURS` | `24` | Інтервал синхронізації (годин) |
 | `GEMINI_API_KEY` | — | Ключ Google Gemini AI |
-| `GEMINI_MODEL` | `models/gemini-flash-latest` | Модель AI |
+| `GEMINI_MODEL` | `models/gemini-flash-latest` | Модель AI (рекомендовано `models/gemini-2.0-flash`) |
+| `GOOGLE_CLIENT_ID` | — | Google OAuth Client ID |
+| `GOOGLE_CLIENT_SECRET` | — | Google OAuth Client Secret |
 
 ## API
 
@@ -101,13 +106,17 @@ docker compose up -d
 | POST | `/api/analyze/batch` | AI-аналіз партією (auth) |
 | POST | `/api/chat` | AI Chat Search (пошук природною мовою) |
 | GET | `/api/workflow/{id}/import` | Миттєвий імпорт в n8n |
+| GET | `/api/auth/google/login` | Google OAuth логін |
+| GET | `/api/auth/me` | Поточний користувач (avatar, email) |
+| POST | `/api/admin/analyze-all` | AI-аналіз всіх (admin) |
+| POST | `/api/admin/clear-all` | Очистити БД (admin) |
 
 ## Деплой на EasyPanel
 
 1. Завантажте проєкт у GitHub репозиторій
 2. В EasyPanel: **Service** → **App** → GitHub → ваш репо
 3. Build: Docker (автоматично знайде Dockerfile)
-4. Environment Variables: `ADMIN_PASS`, `SECRET_KEY`
+4. Environment Variables: `ADMIN_PASS`, `SECRET_KEY`, `GEMINI_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 5. Volumes: `/data` для збереження БД
 6. Port: `8000`
 7. Налаштуйте домен + HTTPS
