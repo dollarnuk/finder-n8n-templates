@@ -1400,16 +1400,29 @@
   <div class="modal-overlay" id="importModal">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title" data-i18n="importModalTitle">Імпорт воркфлоу</div>
+        <div class="modal-title" data-i18n="importModalTitle">Експорт та Імпорт</div>
         <button class="modal-close" onclick="closeModal('importModal')">✕</button>
       </div>
       <div class="modal-body">
         <div class="import-tabs">
-          <button class="import-tab active" onclick="switchTab(this, 'tabUrl')" data-i18n="urlTab">За
-            посиланням</button>
-          <button class="import-tab" onclick="switchTab(this, 'tabGDrive')" data-i18n="driveTab">Google Drive</button>
-          <button class="import-tab" onclick="switchTab(this, 'tabJson')" data-i18n="jsonTab">JSON</button>
+          <button class="import-tab active" onclick="switchTab(this, 'tabUrl')" data-i18n="urlTab">URL / GitHub</button>
           <button class="import-tab" onclick="switchTab(this, 'tabFile')" data-i18n="fileTab">Файл</button>
+          <button class="import-tab" onclick="switchTab(this, 'tabJson')" data-i18n="jsonTab">JSON</button>
+          <button class="import-tab" onclick="switchTab(this, 'tabDrive')" data-i18n="driveTab">Drive</button>
+          <button class="import-tab" onclick="switchTab(this, 'tabExport')" data-i18n="exportTab">Експорт</button>
+        </div>
+
+        <div class="import-panel" id="tabExport">
+          <div style="text-align:center; padding: 20px 0;">
+            <div style="font-size:40px; margin-bottom:15px">📦</div>
+            <p style="color:var(--text-dim); margin-bottom:20px; font-size:14px" data-i18n="exportHelp">
+              Ви можете експортувати всю базу даних воркфлоу в один JSON файл, включаючи всі AI-аналізи, теги та описи.
+            </p>
+            <button class="btn btn-primary" onclick="doExportData()" data-i18n="exportBtnAction"
+              style="width:100%; justify-content:center">
+              Скачати всю базу (JSON)
+            </button>
+          </div>
         </div>
 
         <div class="import-panel active" id="tabUrl">
@@ -1750,7 +1763,7 @@
     const i18n = {
       uk: {
         loginBtn: "Увійти",
-        importBtn: "Імпорт",
+        importBtn: "Експорт-Імпорт",
         reposBtn: "Репозиторії",
         searchPlaceholder: "Шукайте воркфлоу (назва, ноди, опис...)",
         allCategories: "Всі категорії",
@@ -1789,7 +1802,7 @@
         difficultyIntermediate: "Середній рівень",
         difficultyAdvanced: "Просунутий",
         nodesCount: "нод",
-        importModalTitle: "Імпорт воркфлоу",
+        importModalTitle: "Експорт та Імпорт",
         fileTab: "Файл",
         jsonTab: "JSON",
         urlTab: "URL / GitHub",
@@ -1797,6 +1810,9 @@
         importPlaceholderUrl: "Посилання на GitHub папку або файл...",
         importPlaceholderJson: "Вставте JSON контент воркфлоу тут...",
         importBtnAction: "Імпортувати",
+        exportTab: "Експорт",
+        exportBtnAction: "Скачати всю базу (JSON)",
+        exportHelp: "Ви можете експортувати всю базу даних воркфлоу в один JSON файл, включаючи всі AI-аналізи, теги та описи.",
         driveConnect: "Підключити Google Drive",
         authTitle: "Авторизація",
         authText: "Увійдіть за допомогою Google, щоб отримати доступ до функцій Hub.",
@@ -1944,7 +1960,7 @@
       },
       en: {
         loginBtn: "Login",
-        importBtn: "Import",
+        importBtn: "Export & Import",
         reposBtn: "Repositories",
         searchPlaceholder: "Search workflows (name, nodes, description...)",
         allCategories: "All Categories",
@@ -1968,7 +1984,7 @@
         difficultyIntermediate: "Intermediate",
         difficultyAdvanced: "Advanced",
         nodesCount: "nodes",
-        importModalTitle: "Import Workflow",
+        importModalTitle: "Export & Import",
         fileTab: "File",
         jsonTab: "JSON",
         urlTab: "URL / GitHub",
@@ -1976,6 +1992,9 @@
         importPlaceholderUrl: "GitHub folder or file URL...",
         importPlaceholderJson: "Paste workflow JSON here...",
         importBtnAction: "Import Now",
+        exportTab: "Export",
+        exportBtnAction: "Download Full Database (JSON)",
+        exportHelp: "You can export the entire workflow database into a single JSON file, including all AI analysis, tags, and descriptions.",
         driveConnect: "Connect Google Drive",
         authTitle: "Authentication",
         authText: "Sign in with Google to access Hub features.",
@@ -2638,6 +2657,33 @@
           doSearch(); loadStats(); reloadFilters();
         } else { toast(data.message || i18n[currentLang].toastDuplicate, 'info'); }
       } catch (e) { toast(i18n[currentLang].toastError + ': ' + e.message, 'error'); }
+    }
+
+    async function doExportData() {
+      try {
+        toast('Готую файл для експорту...', 'info');
+        const r = await fetch('/api/admin/export');
+        if (!r.ok) throw new Error('Помилка сервера при експорті');
+        const blob = await r.blob();
+
+        const contentDisposition = r.headers.get('Content-Disposition');
+        let filename = 'n8nhub_export.json';
+        if (contentDisposition && contentDisposition.indexOf('attachment') !== -1) {
+          const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+          const matches = filenameRegex.exec(contentDisposition);
+          if (matches != null && matches[1]) {
+            filename = matches[1].replace(/['"]/g, '');
+          }
+        }
+
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        toast('Експорт завершено успішно', 'success');
+      } catch (e) {
+        toast('Помилка при експорті: ' + e.message, 'error');
+      }
     }
 
     async function doImportFiles() {

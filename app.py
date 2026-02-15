@@ -18,7 +18,8 @@ from authlib.integrations.starlette_client import OAuth
 from database import init_db, search_workflows, get_workflow, delete_workflow, \
     get_all_nodes, get_all_categories, get_stats, get_github_repos, delete_github_repo, clear_all_workflows, \
     upsert_user, get_user_usage, increment_user_usage, get_user_by_email, \
-    update_subscription, add_payment_record, get_payment_history, get_user_by_payment_customer
+    update_subscription, add_payment_record, get_payment_history, get_user_by_payment_customer, \
+    get_all_workflows_full
 from importer import import_from_json, import_from_url, import_from_directory, \
     sync_github_repo, sync_all_repos
 from analyzer import analyze_and_save, analyze_batch, analysis_status, analysis_lock
@@ -580,6 +581,22 @@ async def api_admin_clear_all(request: Request):
         return JSONResponse({"status": "ok", "message": "Усі воркфлоу видалено"})
     except Exception as e:
         logger.error(f"Clear all error: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.get("/api/admin/export")
+async def api_admin_export(request: Request):
+    require_auth(request, admin_only=True)
+    try:
+        data = get_all_workflows_full()
+        from datetime import datetime
+        filename = f"n8nhub_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        return JSONResponse(
+            content=data,
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        logger.error(f"Export error: {e}")
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
 

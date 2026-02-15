@@ -350,6 +350,13 @@ def get_workflow(wf_id):
     return dict(row) if row else None
 
 
+def get_all_workflows_full():
+    """Fetch every record with every column for full export."""
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM workflows ORDER BY added_at DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
 def delete_workflow(wf_id):
     conn = get_db()
     conn.execute("DELETE FROM workflows WHERE id = ?", (wf_id,))
