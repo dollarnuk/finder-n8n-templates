@@ -99,11 +99,13 @@ graph TD
 
 ### Авторизація
 
-- Session-based через `starlette.middleware.sessions.SessionMiddleware`
-- Один адміністратор: `ADMIN_USER` / `ADMIN_PASS` (env vars)
-- Сесія зберігається в cookie (підписана `SECRET_KEY`)
-- Для перегляду та пошуку авторизація НЕ потрібна
-- Для імпорту, видалення, управління репо — потрібна
+- **Google OAuth**: Основний метод входу через `authlib`.
+- **Адміністратор**: Тільки користувач з email `goodstaffshop@gmail.com` має права адміністратора.
+- **Session-based**: Через `starlette.middleware.sessions.SessionMiddleware` (cookies з підписом `SECRET_KEY`).
+- **Рівні доступу**:
+  - Гість/Користувач: Перегляд, пошук, AI Chat (read-only).
+  - Адмін: Імпорт, видалення воркфлоу, управління GitHub репозиторіями, пакетний AI-аналіз.
+- **Fallback**: Legacy логін `ADMIN_USER`/`ADMIN_PASS` доступний як запасний варіант (backend).
 
 ---
 
@@ -189,6 +191,10 @@ graph TD
 | `POST /api/analyze/{id}` | POST | AI-аналіз одного (auth) |
 | `POST /api/analyze/batch` | POST | AI-аналіз партією (auth) |
 | `POST /api/chat` | POST | AI Chat Search |
+| `GET /api/auth/google/login` | GET | Ініціація Google OAuth |
+| `GET /api/auth/google/callback`| GET | Коллбек від Google (auth success) |
+| `POST /api/admin/analyze-all` | POST | Аналізувати всеAI (admin only) |
+| `POST /api/admin/clear-all` | POST | Повне очищення БД (admin only) |
 | `GET /api/filters` | GET | Списки нод та категорій |
 | `GET /api/stats` | GET | Статистика |
 
@@ -224,6 +230,8 @@ graph TD
 | `SYNC_INTERVAL_HOURS` | `24` | Інтервал автосинхронізації GitHub репо (годин) |
 | `GEMINI_API_KEY` | `""` | Google AI (Gemini) API Key |
 | `GEMINI_MODEL` | `models/gemini-flash-latest` | Модель Gemini для аналізу |
+| `GOOGLE_CLIENT_ID` | `""` | Google OAuth Client ID |
+| `GOOGLE_CLIENT_SECRET` | `""` | Google OAuth Client Secret |
 | `PYTHONUNBUFFERED` | `1` | Рекомендовано для логів |
 
 ---
@@ -301,7 +309,27 @@ GITHUB_TOKEN=<ваш GitHub PAT token>
 
 ---
 
-### Що потрібно зробити далі (Фаза 5 — Монетизація та Реліз)
+### Фаза 6 — Google Drive та Адмін-панель (завершена)
+
+1. **Імпорт з Google Drive**: `importer.py` підтримує прямі посилання на файли.
+2. **Адмін-інструменти**: 
+   - `doClearAllWorkflows()` — повне видалення бази.
+   - `doAnalyzeAllUnanalyzed()` — масовий аналіз через Gemini.
+3. **UI для адміна**: Окремий розділ у модалці репозиторіїв з "червоними" кнопками.
+
+---
+
+### Фаза 7 — Google OAuth Авторизація (завершена)
+
+1. **Backend Auth**: Інтеграція `authlib`, сесії Starlette.
+2. **Google Login Popup**: Фронтенд відкриває вікно авторизації та отримує результат через `postMessage`.
+3. **Hardcoded Admin**: Чітке обмеження прав для `goodstaffshop@gmail.com`.
+4. **Header Profile**: Відображення аватара та імені користувача з Google.
+5. **Security logic**: `require_auth` декоратор з параметром `admin_only`.
+
+---
+
+### Що потрібно зробити далі (Фаза 8 — Монетизація та Реліз)
 - Підписочна модель: $1-5/місяць
 - Безкоштовний доступ: перегляд, базовий пошук
 - Платний: AI-пошук, завантаження JSON, instant import, доступ до всієї бази

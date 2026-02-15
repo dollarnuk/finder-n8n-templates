@@ -232,14 +232,14 @@ async def api_get_workflow_json(wf_id: int):
 
 @app.delete("/api/workflow/{wf_id}")
 async def api_delete_workflow(request: Request, wf_id: int):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     delete_workflow(wf_id)
     return JSONResponse({"status": "ok"})
 
 
 @app.post("/api/import/url")
 async def api_import_url(request: Request, url: str = Form(...)):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     try:
         result = await import_from_url(url, analyze=True)
         return JSONResponse(result)
@@ -252,7 +252,7 @@ async def api_import_url(request: Request, url: str = Form(...)):
 
 @app.post("/api/import/json")
 async def api_import_json(request: Request, json_text: str = Form(...), name: str = Form("")):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     try:
         result = await import_from_json(json_text, analyze=True)
         return JSONResponse(result)
@@ -265,7 +265,7 @@ async def api_import_json(request: Request, json_text: str = Form(...), name: st
 
 @app.post("/api/import/file")
 async def api_import_file(request: Request, file: UploadFile = File(...)):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     try:
         content = await file.read()
         result = await import_from_json(content.decode("utf-8"), source_url=f"upload:{file.filename}", analyze=True)
@@ -279,7 +279,7 @@ async def api_import_file(request: Request, file: UploadFile = File(...)):
 
 @app.post("/api/import/local")
 async def api_import_local(request: Request, directory: str = Form(...)):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     try:
         result = await import_from_directory(directory, analyze=True)
         return JSONResponse(result)
@@ -292,14 +292,14 @@ async def api_import_local(request: Request, directory: str = Form(...)):
 
 @app.get("/api/repos")
 async def api_get_repos(request: Request):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     repos = get_github_repos()
     return JSONResponse(repos)
 
 
 @app.post("/api/repos/sync/{repo_id}")
 async def api_sync_repo(request: Request, repo_id: int):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     repos = get_github_repos()
     repo = next((r for r in repos if r["id"] == repo_id), None)
     if not repo:
@@ -310,14 +310,14 @@ async def api_sync_repo(request: Request, repo_id: int):
 
 @app.post("/api/repos/sync-all")
 async def api_sync_all(request: Request):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     results = await sync_all_repos()
     return JSONResponse(results)
 
 
 @app.delete("/api/repos/{repo_id}")
 async def api_delete_repo(request: Request, repo_id: int):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     delete_github_repo(repo_id)
     return JSONResponse({"status": "ok"})
 
@@ -338,7 +338,7 @@ async def api_get_stats():
 
 @app.post("/api/analyze/{wf_id}")
 async def api_analyze_workflow(request: Request, wf_id: int):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     result = await analyze_and_save(wf_id)
     if "error" in result:
         return JSONResponse(result, status_code=400)
@@ -347,7 +347,7 @@ async def api_analyze_workflow(request: Request, wf_id: int):
 
 @app.post("/api/analyze/batch")
 async def api_analyze_batch(request: Request, limit: int = 50):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     result = await analyze_batch(limit=limit)
     if "error" in result:
         return JSONResponse(result, status_code=400)
@@ -356,7 +356,7 @@ async def api_analyze_batch(request: Request, limit: int = 50):
 
 @app.post("/api/admin/clear-all")
 async def api_admin_clear_all(request: Request):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     try:
         clear_all_workflows()
         return JSONResponse({"status": "ok", "message": "Усі воркфлоу видалено"})
@@ -367,7 +367,7 @@ async def api_admin_clear_all(request: Request):
 
 @app.post("/api/admin/analyze-all")
 async def api_admin_analyze_all(request: Request):
-    require_auth(request)
+    require_auth(request, admin_only=True)
     try:
         # High limit to analyze everything unanalyzed
         result = await analyze_batch(limit=1000)
