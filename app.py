@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request, Response, HTTPException, Form, UploadFile,
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from authlib.integrations.starlette_client import OAuth
 
 from database import init_db, search_workflows, get_workflow, delete_workflow, \
     get_all_nodes, get_all_categories, get_stats, get_github_repos, delete_github_repo, clear_all_workflows
@@ -26,6 +27,24 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "n8n-hub-secret-key-change-me")
 INITIAL_REPOS = os.environ.get("INITIAL_REPOS", "").strip()
 LOCAL_WORKFLOWS_DIR = os.environ.get("LOCAL_WORKFLOWS_DIR", "./data/workflows").strip()
 SYNC_INTERVAL_HOURS = int(os.environ.get("SYNC_INTERVAL_HOURS", "24"))
+
+# OAuth Config
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+CONF_URL = 'https://accounts.google.com/.well-known/openid-configuration'
+
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    server_metadata_url=CONF_URL,
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
+
+ADMIN_EMAIL = "goodstaffshop@gmail.com"
 
 
 async def periodic_sync():
@@ -85,12 +104,21 @@ templates = Jinja2Templates(directory="templates")
 
 # Auth helpers
 def is_authenticated(request: Request) -> bool:
-    return request.session.get("authenticated", False)
+    return request.session.get("user") is not None
 
 
-def require_auth(request: Request):
+def is_admin(request: Request) -> bool:
+    user = request.session.get("user")
+    if not user:
+        return False
+    return user.get("email") == ADMIN_EMAIL
+
+
+def require_auth(request: Request, admin_only: bool = False):
     if not is_authenticated(request):
         raise HTTPException(status_code=401, detail="Необхідна авторизація")
+    if admin_only and not is_admin(request):
+        raise HTTPException(status_code=403, detail="Доступ лише для адміністратора")
 
 
 # ==================== Health Check ====================
@@ -113,13 +141,49 @@ async def index(request: Request):
         "nodes": nodes,
         "categories": categories,
         "authenticated": is_authenticated(request),
+        "is_admin": is_admin(request),
+        "user": request.session.get("user"),
     })
+
+
+# ==================== OAuth Routes ====================
+
+@app.get("/api/auth/google/login")
+async def google_login(request: Request):
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Google OAuth не налаштовано (відсутні Client ID/Secret)")
+    
+    redirect_uri = request.url_for('google_auth_callback')
+    # Support HTTPS behind proxy (like EasyPanel)
+    if not str(redirect_uri).startswith("https") and "easypanel.host" in str(redirect_uri):
+        redirect_uri = str(redirect_uri).replace("http://", "https://")
+    
+    return await oauth.google.authorize_redirect(request, str(redirect_uri))
+
+
+@app.get("/api/auth/google/callback")
+async def google_auth_callback(request: Request):
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        user = token.get('userinfo')
+        if user:
+            request.session['user'] = {
+                'email': user['email'],
+                'name': user.get('name', user['email'].split('@')[0]),
+                'picture': user.get('picture', '')
+            }
+            logger.info(f"User logged in: {user['email']}")
+        return HTMLResponse("<script>window.opener.postMessage('auth_success', '*'); window.close();</script>")
+    except Exception as e:
+        logger.error(f"OAuth error: {e}")
+        return HTMLResponse(f"<script>alert('Помилка входу: {str(e)}'); window.close();</script>")
 
 
 @app.post("/api/login")
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    # Legacy login kept for now but could be removed
     if username == ADMIN_USER and password == ADMIN_PASS:
-        request.session["authenticated"] = True
+        request.session["user"] = {"email": "admin@local", "name": "Admin (Local)"}
         return JSONResponse({"status": "ok"})
     raise HTTPException(status_code=401, detail="Невірний логін або пароль")
 
