@@ -56,7 +56,28 @@ Workflow:
 10. integrations_summary_uk / integrations_summary_en — людяний опис сервісів, що з'єднуються.
 11. difficulty_level — рівень складності (beginner, intermediate, advanced).
 
-Відповідь ТІЛЬКИ у форматі JSON."""
+Відповідь має бути СУВОРО у форматі JSON:
+{{
+  "usefulness": N,
+  "universality": N,
+  "complexity": N,
+  "scalability": N,
+  "suggested_name": "...",
+  "difficulty_level": "...",
+  "tags": ["tag1", "tag2"],
+  "uk": {{
+    "summary": "...",
+    "use_cases": ["...", "..."],
+    "target_audience": "...",
+    "integrations_summary": "..."
+  }},
+  "en": {{
+    "summary": "...",
+    "use_cases": ["...", "..."],
+    "target_audience": "...",
+    "integrations_summary": "..."
+  }}
+}}"""
 
 
 def _build_prompt(wf: dict) -> str:
@@ -101,6 +122,11 @@ async def analyze_workflow(wf: dict) -> dict:
         
         raw = response.choices[0].message.content.strip()
         result = json.loads(raw)
+
+        # Ensure all required keys exist with defaults
+        for key in ["usefulness", "universality", "complexity", "scalability"]:
+            if key not in result:
+                result[key] = 5
 
         result.setdefault("uk", {})
         result.setdefault("en", {})
@@ -154,17 +180,17 @@ async def analyze_and_save(wf_id: int) -> dict:
 
     update_workflow_ai(
         wf_id,
-        usefulness=result["usefulness"],
-        universality=result["universality"],
-        complexity=result["complexity"],
-        scalability=result["scalability"],
-        summary=result["uk"]["summary"],
-        tags=result["tags"],
-        use_cases=result["uk"]["use_cases"],
-        target_audience=result["uk"]["target_audience"],
-        integrations_summary=result["uk"]["integrations_summary"],
-        difficulty_level=result["difficulty_level"],
-        result_en=result["en"]
+        usefulness=result.get("usefulness", 5),
+        universality=result.get("universality", 5),
+        complexity=result.get("complexity", 5),
+        scalability=result.get("scalability", 5),
+        summary=result.get("uk", {}).get("summary", ""),
+        tags=result.get("tags", []),
+        use_cases=result.get("uk", {}).get("use_cases", []),
+        target_audience=result.get("uk", {}).get("target_audience", ""),
+        integrations_summary=result.get("uk", {}).get("integrations_summary", ""),
+        difficulty_level=result.get("difficulty_level", "intermediate"),
+        result_en=result.get("en", {})
     )
 
     # Update name if suggested and current name is generic
@@ -234,17 +260,17 @@ async def analyze_batch(limit: int = 50) -> dict:
             if result:
                 update_workflow_ai(
                     wf["id"],
-                    usefulness=result["usefulness"],
-                    universality=result["universality"],
-                    complexity=result["complexity"],
-                    scalability=result["scalability"],
-                    summary=result["uk"]["summary"],
-                    tags=result["tags"],
-                    use_cases=result["uk"]["use_cases"],
-                    target_audience=result["uk"]["target_audience"],
-                    integrations_summary=result["uk"]["integrations_summary"],
-                    difficulty_level=result["difficulty_level"],
-                    result_en=result["en"]
+                    usefulness=result.get("usefulness", 5),
+                    universality=result.get("universality", 5),
+                    complexity=result.get("complexity", 5),
+                    scalability=result.get("scalability", 5),
+                    summary=result.get("uk", {}).get("summary", ""),
+                    tags=result.get("tags", []),
+                    use_cases=result.get("uk", {}).get("use_cases", []),
+                    target_audience=result.get("uk", {}).get("target_audience", ""),
+                    integrations_summary=result.get("uk", {}).get("integrations_summary", ""),
+                    difficulty_level=result.get("difficulty_level", "intermediate"),
+                    result_en=result.get("en", {})
                 )
                 analyzed += 1
                 analysis_status["analyzed"] = analyzed
@@ -257,17 +283,17 @@ async def analyze_batch(limit: int = 50) -> dict:
                 if result:
                     update_workflow_ai(
                         wf["id"],
-                        usefulness=result["usefulness"],
-                        universality=result["universality"],
-                        complexity=result["complexity"],
-                        scalability=result["scalability"],
-                        summary=result["uk"]["summary"],
-                        tags=result["tags"],
-                        use_cases=result["uk"]["use_cases"],
-                        target_audience=result["uk"]["target_audience"],
-                        integrations_summary=result["uk"]["integrations_summary"],
-                        difficulty_level=result["difficulty_level"],
-                        result_en=result["en"]
+                        usefulness=result.get("usefulness", 5),
+                        universality=result.get("universality", 5),
+                        complexity=result.get("complexity", 5),
+                        scalability=result.get("scalability", 5),
+                        summary=result.get("uk", {}).get("summary", ""),
+                        tags=result.get("tags", []),
+                        use_cases=result.get("uk", {}).get("use_cases", []),
+                        target_audience=result.get("uk", {}).get("target_audience", ""),
+                        integrations_summary=result.get("uk", {}).get("integrations_summary", ""),
+                        difficulty_level=result.get("difficulty_level", "intermediate"),
+                        result_en=result.get("en", {})
                     )
                     analyzed += 1
                     analysis_status["analyzed"] = analyzed
