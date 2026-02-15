@@ -1551,6 +1551,16 @@
                 🗑️ Видалити все
               </button>
             </div>
+            <div class="admin-tool-card"
+              style="background:var(--bg-light); padding:15px; border-radius:8px; border:1px solid var(--border); grid-column: span 2">
+              <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+                Переглянути список усіх зареєстрованих клієнтів, їх підписки та статистику використання.
+              </p>
+              <button class="btn btn-sm btn-primary" onclick="openAdminUsersModal()"
+                style="width:100%; justify-content:center">
+                👥 <span data-i18n="adminUsersBtn">Зареєстровані користувачі</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1624,6 +1634,36 @@
           <div class="loading">
             <div class="spinner"></div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ADMIN USERS MODAL ===== -->
+  <div class="modal-overlay" id="adminUsersModal">
+    <div class="modal" style="max-width:900px">
+      <div class="modal-header">
+        <div class="modal-title" data-i18n="adminUsersTitle">Управління користувачами</div>
+        <button class="modal-close" onclick="closeModal('adminUsersModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="adminUsersStats"
+          style="margin-bottom:20px; padding:15px; background:var(--bg-light); border-radius:8px; border:1px solid var(--border); display:flex; gap:30px">
+          <div><span data-i18n="userTableTotal">Всього користувачів:</span> <b id="adminTotalUsers">0</b></div>
+          <div><span data-i18n="userTablePro">PRO підписки:</span> <b id="adminProUsers">0</b></div>
+        </div>
+        <div style="max-height: 500px; overflow-y: auto;">
+          <table class="import-results-table">
+            <thead style="position:sticky; top:0; background:var(--bg-card)">
+              <tr>
+                <th data-i18n="userTableName">Користувач</th>
+                <th data-i18n="userTableJoined">Коли приєднався</th>
+                <th data-i18n="userTablePlan">План</th>
+                <th data-i18n="userTableUsage">AI Пошуки</th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersList"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1768,6 +1808,14 @@
         toastError: "Помилка",
         importing: "Імпортую...",
         uploadingFromDisk: "Завантажую з Диску...",
+        adminUsersBtn: "👥 Користувачі",
+        adminUsersTitle: "Список користувачів",
+        userTableName: "Користувач",
+        userTableJoined: "Приєднався",
+        userTablePlan: "План",
+        userTableUsage: "AI Пошуки",
+        userTableTotal: "Всього:",
+        userTablePro: "PRO:",
         processing: "Обробка...",
         completed: "Завершено",
         statusOk: "OK",
@@ -1938,6 +1986,14 @@
         toastError: "Error",
         importing: "Importing...",
         uploadingFromDisk: "Uploading from Drive...",
+        adminUsersBtn: "👥 Users",
+        adminUsersTitle: "User List",
+        userTableName: "User",
+        userTableJoined: "Joined",
+        userTablePlan: "Plan",
+        userTableUsage: "AI Usage",
+        userTableTotal: "Total:",
+        userTablePro: "PRO:",
         processing: "Processing...",
         completed: "Completed",
         statusOk: "OK",
@@ -2941,6 +2997,45 @@
           }
         }
       } catch (e) { console.error("Polling error:", e); }
+    }
+    async function openAdminUsersModal() {
+      openModal('adminUsersModal');
+      const list = document.getElementById('adminUsersList');
+      list.innerHTML = '<tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>';
+      try {
+        const r = await fetch('/api/admin/users');
+        const data = await r.json();
+        list.innerHTML = '';
+        let proCount = 0;
+        data.forEach(u => {
+          if (u.sub_status === 'active') proCount++;
+          const tr = document.createElement('tr');
+          const date = new Date(u.created_at).toLocaleDateString(currentLang === 'uk' ? 'uk-UA' : 'en-US');
+          tr.innerHTML = `
+            <td>
+              <div style="display:flex;align-items:center;gap:10px">
+                <img src="${u.picture}" style="width:24px;height:24px;border-radius:50%">
+                <div>
+                  <div style="font-size:13px;font-weight:600">${esc(u.name)}</div>
+                  <div style="font-size:11px;color:var(--text-muted)">${u.email}</div>
+                </div>
+              </div>
+            </td>
+            <td>${date}</td>
+            <td>
+              <span class="status-badge ${u.sub_status === 'active' ? 'status-ok' : 'status-dim'}">
+                ${u.sub_status === 'active' ? 'PRO' : 'FREE'}
+              </span>
+            </td>
+            <td><b style="color:var(--accent)">${u.ai_chat_count}</b></td>
+          `;
+          list.appendChild(tr);
+        });
+        document.getElementById('adminTotalUsers').textContent = data.length;
+        document.getElementById('adminProUsers').textContent = proCount;
+      } catch (e) {
+        list.innerHTML = `<tr><td colspan="4" style="color:var(--danger);text-align:center">Error loading users</td></tr>`;
+      }
     }
   </script>
   <!-- AI Progress Widget (Floating) -->

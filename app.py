@@ -574,6 +574,17 @@ async def api_admin_analysis_status(request: Request):
     })
 
 
+@app.get("/api/admin/users")
+async def api_admin_users(request: Request):
+    require_auth(request, admin_only=True)
+    try:
+        users = get_admin_users_report()
+        return JSONResponse(users)
+    except Exception as e:
+        logger.error(f"Get admin users error: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
 # ==================== AI Chat Search ====================
 
 @app.post("/api/chat")

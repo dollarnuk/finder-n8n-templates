@@ -553,3 +553,19 @@ def increment_user_usage(user_id):
     conn = get_db()
     conn.execute("UPDATE user_usage SET ai_chat_count = ai_chat_count + 1 WHERE user_id = ?", (user_id,))
     conn.commit()
+
+
+def get_admin_users_report():
+    """Retrieve all users with subscription and usage stats for admin."""
+    conn = get_db()
+    cursor = conn.execute("""
+        SELECT 
+            u.id, u.email, u.name, u.picture, u.created_at,
+            COALESCE(s.status, 'inactive') as sub_status,
+            COALESCE(us.ai_chat_count, 0) as ai_chat_count
+        FROM users u
+        LEFT JOIN subscriptions s ON u.id = s.user_id
+        LEFT JOIN user_usage us ON u.id = us.user_id
+        ORDER BY u.created_at DESC
+    """)
+    return [dict(row) for row in cursor.fetchall()]
