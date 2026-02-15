@@ -1195,12 +1195,43 @@
 
         <div class="import-panel" id="tabFile">
           <div class="form-group">
-            <label class="form-label">JSON файл (.json)</label>
-            <input type="file" class="form-input" id="importFile" accept=".json" style="padding:8px">
+            <label class="form-label">Виберіть JSON файли (.json)</label>
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('importFile').click()">
+              <div class="drop-zone-icon">📁</div>
+              <p style="color:var(--text-dim); margin-bottom:4px">Клікніть або перетягніть файли сюди</p>
+              <p style="font-size:11px; color:var(--text-muted)">Можна вибрати декілька файлів водночас</p>
+            </div>
+            <input type="file" class="form-input" id="importFile" accept=".json" multiple style="display:none">
           </div>
-          <button class="btn btn-primary" onclick="doImportFile()">
-            Завантажити
+          <button class="btn btn-primary" onclick="doImportFiles()">
+            Завантажити обране
           </button>
+        </div>
+
+        <!-- Import Progress/Results -->
+        <div id="importStatusArea"
+          style="display:none; margin-top:20px; border-top:1px solid var(--border); padding-top:20px;">
+          <h4 style="font-size:14px; margin-bottom:12px;">Статус обробки</h4>
+          <div class="import-progress-container" id="importProgress">
+            <div style="display:flex; justify-content:space-between; font-size:12px">
+              <span id="importProgressText">Обробка...</span>
+              <span id="importProgressCount">0/0</span>
+            </div>
+            <div class="import-progress-bar">
+              <div class="import-progress-fill" id="importProgressFill"></div>
+            </div>
+          </div>
+          <div style="max-height: 250px; overflow-y: auto;">
+            <table class="import-results-table">
+              <thead>
+                <tr>
+                  <th>Файл</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody id="importResultsList"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -1529,6 +1560,22 @@
         <h3>AI-теги</h3>
         <div class="detail-nodes">${wf.ai_tags.map(t => `<span class="ai-tag">${esc(t)}</span>`).join('')}</div>
       </div>` : ''}
+    
+      <div class="detail-section">
+        <h3>Додаткова аналітика</h3>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          ${wf.ai_difficulty_level ? `<div><strong>Рівень:</strong> <span class="wf-trigger" data-type="${wf.ai_difficulty_level}">${wf.ai_difficulty_level}</span></div>` : ''}
+          ${wf.ai_integrations_summary ? `<div><strong>Інтеграції:</strong> <span style="color:var(--text-dim);font-size:14px">${esc(wf.ai_integrations_summary)}</span></div>` : ''}
+          ${wf.ai_target_audience ? `<div><strong>Аудиторія:</strong> <span style="color:var(--text-dim);font-size:14px">${esc(wf.ai_target_audience)}</span></div>` : ''}
+          ${(wf.ai_use_cases || []).length ? `
+            <div>
+              <strong>Кейси:</strong>
+              <ul style="margin:8px 0 0 16px; color:var(--text-dim); font-size:14px; padding-left:0;">
+                ${wf.ai_use_cases.map(c => `<li>${esc(c)}</li>`).join('')}
+              </ul>
+            </div>` : ''}
+        </div>
+      </div>
       ` : `
       <div class="detail-section">
         ${authenticated ? `<button class="btn btn-sm" onclick="analyzeWorkflow(${wf.id})">🤖 Аналізувати AI</button>` : '<p style="color:var(--text-muted);font-size:12px">AI-аналіз ще не проведено</p>'}
@@ -1640,19 +1687,88 @@
       } catch (e) { toast('Помилка: ' + e.message, 'error'); }
     }
 
-    async function doImportFile() {
-      const file = document.getElementById('importFile').files[0];
-      if (!file) return toast('Оберіть файл', 'error');
-      const fd = new FormData(); fd.append('file', file);
-      try {
-        const r = await fetch('/api/import/file', { method: 'POST', body: fd });
-        const data = await r.json();
-        if (data.status === 'ok') {
-          toast(`Імпортовано: ${data.name}`, 'success');
-          doSearch(); loadStats(); reloadFilters();
-        } else { toast(data.message || 'Дублікат', 'info'); }
-      } catch (e) { toast('Помилка: ' + e.message, 'error'); }
+    async function doImportFiles() {
+      const files = document.getElementById('importFile').files;
+      if (!files.length) return toast('Оберіть файли', 'error');
+
+      const statusArea = document.getElementById('importStatusArea');
+      const resultsList = document.getElementById('importResultsList');
+      const progressContainer = document.getElementById('importProgress');
+      const progressFill = document.getElementById('importProgressFill');
+      const progressCount = document.getElementById('importProgressCount');
+
+      statusArea.style.display = 'block';
+      resultsList.innerHTML = '';
+      progressContainer.style.display = 'block';
+
+      let imported = 0;
+      let total = files.length;
+
+      for (let i = 0; i < total; i++) {
+        const file = files[i];
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${esc(file.name)}</td><td><span class="spinner" style="width:12px;height:12px;border-width:2px"></span></td>`;
+        resultsList.appendChild(row);
+
+        // Update progress
+        const percent = Math.round(((i) / total) * 100);
+        progressFill.style.width = percent + '%';
+        progressCount.textContent = `${i}/${total}`;
+
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const r = await fetch('/api/import/file', { method: 'POST', body: fd });
+          const data = await r.json();
+
+          let statusHtml = '';
+          if (data.status === 'ok') {
+            statusHtml = `<span class="status-badge status-ok">OK</span>`;
+            imported++;
+          } else if (data.status === 'duplicate') {
+            statusHtml = `<span class="status-badge status-duplicate">Дублікат</span>`;
+          } else {
+            statusHtml = `<span class="status-badge status-error" title="${esc(data.message)}">Помилка</span>`;
+          }
+          row.cells[1].innerHTML = statusHtml;
+        } catch (e) {
+          row.cells[1].innerHTML = `<span class="status-badge status-error">Помилка мережі</span>`;
+        }
+      }
+
+      progressFill.style.width = '100%';
+      progressCount.textContent = `${total}/${total}`;
+      document.getElementById('importProgressText').textContent = 'Завершено';
+
+      if (imported > 0) {
+        toast(`Імпорт завершено! Додано: ${imported} воркфлоу`, 'success');
+        doSearch(); loadStats(); reloadFilters();
+      }
     }
+
+    // Drag & Drop
+    const dropZone = document.getElementById('dropZone');
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+      dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        e.stopPropagation();
+      }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropZone.addEventListener(evt, () => dropZone.classList.add('active'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      dropZone.addEventListener(evt, () => dropZone.classList.remove('active'), false);
+    });
+
+    dropZone.addEventListener('drop', e => {
+      const { files } = e.dataTransfer;
+      document.getElementById('importFile').files = files;
+      // Show file count in drop zone
+      dropZone.querySelector('p').textContent = `Обрано файлів: ${files.length}`;
+    }, false);
 
     // ===== AI Analysis =====
     async function analyzeWorkflow(id) {
@@ -1769,8 +1885,26 @@
     }
 
     // ===== Modal helpers =====
-    function openModal(id) { document.getElementById(id).classList.add('active'); }
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+      if (id === 'importModal') resetImportModal();
+    }
     function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function resetImportModal() {
+      document.getElementById('importUrl').value = '';
+      document.getElementById('importJson').value = '';
+      document.getElementById('importFile').value = '';
+      document.getElementById('importStatusArea').style.display = 'none';
+      if (document.getElementById('importProgress')) {
+        document.getElementById('importProgress').style.display = 'none';
+        document.getElementById('importProgressFill').style.width = '0%';
+        document.getElementById('importProgressText').textContent = 'Обробка...';
+        document.getElementById('importProgressCount').textContent = '0/0';
+      }
+      document.getElementById('importResultsList').innerHTML = '';
+      const dzp = document.getElementById('dropZone').querySelector('p');
+      if (dzp) dzp.textContent = 'Клікніть або перетягніть файли сюди';
+    }
     function openAuthModal() { openModal('authModal'); document.getElementById('authUser').focus(); }
     function openImportModal() { openModal('importModal'); }
     function openReposModal() { openModal('reposModal'); loadRepos(); }
@@ -1784,6 +1918,9 @@
       btn.classList.add('active');
       btn.closest('.modal-body').querySelectorAll('.import-panel').forEach(p => p.classList.remove('active'));
       document.getElementById(panelId).classList.add('active');
+
+      // Reset status area when switching tabs
+      document.getElementById('importStatusArea').style.display = 'none';
     }
 
     // ===== Utils =====

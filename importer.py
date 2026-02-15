@@ -97,6 +97,9 @@ def _github_headers():
 
 def parse_workflow_json(json_str: str) -> dict:
     """Parse n8n workflow JSON and extract metadata."""
+    if not json_str or len(json_str) < 50:
+        raise ValueError("Файл занадто малий для воркфлоу n8n")
+
     try:
         data = json.loads(json_str)
     except json.JSONDecodeError:
@@ -104,9 +107,15 @@ def parse_workflow_json(json_str: str) -> dict:
 
     # Handle both direct workflow and wrapped format
     if isinstance(data, list):
-        data = data[0] if data else {}
+        data = data[0] if (data and isinstance(data[0], dict)) else {}
+
+    if not isinstance(data, dict):
+        raise ValueError("Воркфлоу має бути об'єктом (JSON Object)")
 
     nodes_list = data.get("nodes", [])
+    if not isinstance(nodes_list, list) or not nodes_list:
+        raise ValueError("Воркфлоу не містить нод (поле 'nodes' порожнє або відсутнє)")
+
     name = data.get("name", "Без назви")
 
     # Extract node types
@@ -161,7 +170,7 @@ def parse_workflow_json(json_str: str) -> dict:
     }
 
 
-async def import_from_json(json_str: str, source_url: str = "", source_repo: str = "") -> dict:
+async def import_from_json(json_str: str, source_url: str = "", source_repo: str = "", analyze: bool = False) -> dict:
     """Import a single workflow from raw JSON."""
     parsed = parse_workflow_json(json_str)
     wf_id = insert_workflow(
@@ -177,12 +186,19 @@ async def import_from_json(json_str: str, source_url: str = "", source_repo: str
         json_hash=parsed["json_hash"],
     )
     if wf_id:
+        if analyze:
+            try:
+                from analyzer import analyze_and_save
+                await analyze_and_save(wf_id)
+            except Exception as e:
+                logger.error(f"AI analysis failed for imported workflow {wf_id}: {e}")
+        
         return {"status": "ok", "id": wf_id, "name": parsed["name"]}
     else:
         return {"status": "duplicate", "name": parsed["name"]}
 
 
-async def import_from_directory(dir_path: str, source_repo: str = "") -> dict:
+async def import_from_directory(dir_path: str, source_repo: str = "", analyze: bool = False) -> dict:
     """Import all JSON workflow files from a local directory (batch mode)."""
     p = Path(dir_path)
     if not p.is_dir():
@@ -215,6 +231,23 @@ async def import_from_directory(dir_path: str, source_repo: str = "") -> dict:
 
     imported, duplicates = insert_workflows_batch(batch)
 
+    # Trigger AI analysis for new ones if requested
+    if analyze and imported > 0:
+        logger.info(f"Triggering AI analysis for {imported} imported workflows...")
+        from database import get_db
+        conn = get_db()
+        # Find just imported IDs based on their hashes
+        hashes = [wf["json_hash"] for wf in batch]
+        placeholders = ",".join(["?"] * len(hashes))
+        rows = conn.execute(f"SELECT id FROM workflows WHERE json_hash IN ({placeholders})", hashes).fetchall()
+        for row in rows:
+            try:
+                from analyzer import analyze_and_save
+                await analyze_and_save(row["id"])
+                await asyncio.sleep(1.0) # Rate limiting for Gemini free tier
+            except Exception as e:
+                logger.error(f"AI batch analysis error for {row['id']}: {e}")
+
     logger.info(f"Import complete: {imported} new, {duplicates} duplicates, {errors} errors")
 
     return {
@@ -226,41 +259,41 @@ async def import_from_directory(dir_path: str, source_repo: str = "") -> dict:
     }
 
 
-async def import_from_url(url: str) -> dict:
+async def import_from_url(url: str, analyze: bool = False) -> dict:
     """Import workflow(s) from a URL - GitHub file, GitHub repo dir, or n8n.io."""
     url = url.strip()
 
     # GitHub raw file
     if "raw.githubusercontent.com" in url and url.endswith(".json"):
-        return await _import_github_raw(url)
+        return await _import_github_raw(url, analyze=analyze)
 
     # GitHub blob/file URL
     if "github.com" in url and "/blob/" in url and url.endswith(".json"):
         raw_url = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
-        return await _import_github_raw(raw_url)
+        return await _import_github_raw(raw_url, analyze=analyze)
 
     # GitHub repo or directory
     if "github.com" in url and "/tree/" in url:
-        return await _import_github_dir(url)
+        return await _import_github_dir(url, analyze=analyze)
 
     # GitHub repo root (no /tree/)
     if re.match(r"https?://github\.com/[\w.\-]+/[\w.\-]+/?$", url):
-        return await _import_github_dir(url)
+        return await _import_github_dir(url, analyze=analyze)
 
     # n8n.io workflow URL
     if "n8n.io/workflows/" in url:
-        return await _import_n8n_io(url)
+        return await _import_n8n_io(url, analyze=analyze)
 
     return {"status": "error", "message": "Непідтримуваний формат URL"}
 
 
-async def _import_github_raw(raw_url: str) -> dict:
+async def _import_github_raw(raw_url: str, analyze: bool = False) -> dict:
     """Import a single JSON file from GitHub raw URL."""
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(raw_url, headers=_github_headers())
         if resp.status_code != 200:
             return {"status": "error", "message": f"HTTP {resp.status_code}"}
-        return await import_from_json(resp.text, source_url=raw_url)
+        return await import_from_json(resp.text, source_url=raw_url, analyze=analyze)
 
 
 async def _get_default_branch(client: httpx.AsyncClient, owner: str, repo: str) -> str:
@@ -277,7 +310,7 @@ async def _get_default_branch(client: httpx.AsyncClient, owner: str, repo: str) 
     return "main"
 
 
-async def _import_github_dir(url: str) -> dict:
+async def _import_github_dir(url: str, analyze: bool = False) -> dict:
     """Import all JSON files from a GitHub repo by downloading ZIP archive.
     This avoids git/trees truncation and Contents API limits for large repos.
     """
@@ -347,11 +380,25 @@ async def _import_github_dir(url: str) -> dict:
                 logger.info(f"Import progress: {i + 1}/{total_json} "
                             f"(+{imported} new, {duplicates} dup, {errors} err)")
 
-    # Flush remaining
     if batch:
         new, dups = insert_workflows_batch(batch)
         imported += new
         duplicates += dups
+    
+    # Trigger AI analysis for the whole repo if requested
+    if analyze and imported > 0:
+        logger.info(f"Triggering AI analysis for {imported} imported GitHub workflows...")
+        from database import get_db
+        from analyzer import analyze_and_save
+        conn = get_db()
+        # Find imported IDs from this repo
+        rows = conn.execute("SELECT id FROM workflows WHERE source_repo = ? AND ai_analyzed_at = ''", (repo_url,)).fetchall()
+        for row in rows:
+            try:
+                await analyze_and_save(row["id"])
+                await asyncio.sleep(1.0)
+            except Exception as e:
+                logger.error(f"AI batch analysis error: {e}")
 
     logger.info(f"GitHub import complete: {imported} new, {duplicates} dup, {errors} err out of {total_json}")
 
@@ -368,7 +415,7 @@ async def _import_github_dir(url: str) -> dict:
     }
 
 
-async def _import_n8n_io(url: str) -> dict:
+async def _import_n8n_io(url: str, analyze: bool = False) -> dict:
     """Import from n8n.io/workflows/ URL."""
     match = re.search(r"/workflows/(\d+)", url)
     if not match:
@@ -385,7 +432,7 @@ async def _import_n8n_io(url: str) -> dict:
         data = resp.json()
         workflow = data.get("workflow", data)
         json_str = json.dumps(workflow, ensure_ascii=False)
-        return await import_from_json(json_str, source_url=url)
+        return await import_from_json(json_str, source_url=url, analyze=analyze)
 
 
 async def sync_github_repo(repo_url: str) -> dict:

@@ -138,6 +138,7 @@ async def api_search(q: str = "", category: str = "", node: str = "", page: int 
     for wf in results["workflows"]:
         wf["nodes"] = json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"]
         wf["categories"] = json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"]
+        wf["ai_use_cases"] = json.loads(wf.get("ai_use_cases")) if isinstance(wf.get("ai_use_cases"), str) else wf.get("ai_use_cases", [])
     return JSONResponse(results)
 
 
@@ -149,6 +150,7 @@ async def api_get_workflow(wf_id: int):
     wf["nodes"] = json.loads(wf["nodes"]) if isinstance(wf["nodes"], str) else wf["nodes"]
     wf["categories"] = json.loads(wf["categories"]) if isinstance(wf["categories"], str) else wf["categories"]
     wf["ai_tags"] = json.loads(wf["ai_tags"]) if isinstance(wf.get("ai_tags"), str) else wf.get("ai_tags", [])
+    wf["ai_use_cases"] = json.loads(wf.get("ai_use_cases")) if isinstance(wf.get("ai_use_cases"), str) else wf.get("ai_use_cases", [])
     return JSONResponse(wf)
 
 
@@ -175,20 +177,26 @@ async def api_delete_workflow(request: Request, wf_id: int):
 async def api_import_url(request: Request, url: str = Form(...)):
     require_auth(request)
     try:
-        result = await import_from_url(url)
+        result = await import_from_url(url, analyze=True)
         return JSONResponse(result)
-    except Exception as e:
+    except ValueError as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
+    except Exception as e:
+        logger.error(f"URL import error: {e}")
+        return JSONResponse({"status": "error", "message": "Внутрішня помилка сервера"}, status_code=500)
 
 
 @app.post("/api/import/json")
 async def api_import_json(request: Request, json_text: str = Form(...), name: str = Form("")):
     require_auth(request)
     try:
-        result = await import_from_json(json_text)
+        result = await import_from_json(json_text, analyze=True)
         return JSONResponse(result)
-    except Exception as e:
+    except ValueError as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
+    except Exception as e:
+        logger.error(f"JSON import error: {e}")
+        return JSONResponse({"status": "error", "message": "Внутрішня помилка сервера"}, status_code=500)
 
 
 @app.post("/api/import/file")
@@ -196,20 +204,26 @@ async def api_import_file(request: Request, file: UploadFile = File(...)):
     require_auth(request)
     try:
         content = await file.read()
-        result = await import_from_json(content.decode("utf-8"), source_url=f"upload:{file.filename}")
+        result = await import_from_json(content.decode("utf-8"), source_url=f"upload:{file.filename}", analyze=True)
         return JSONResponse(result)
-    except Exception as e:
+    except ValueError as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
+    except Exception as e:
+        logger.error(f"File import error: {e}")
+        return JSONResponse({"status": "error", "message": "Внутрішня помилка сервера"}, status_code=500)
 
 
 @app.post("/api/import/local")
 async def api_import_local(request: Request, directory: str = Form(...)):
     require_auth(request)
     try:
-        result = await import_from_directory(directory)
+        result = await import_from_directory(directory, analyze=True)
         return JSONResponse(result)
-    except Exception as e:
+    except ValueError as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
+    except Exception as e:
+        logger.error(f"Local import error: {e}")
+        return JSONResponse({"status": "error", "message": "Внутрішня помилка сервера"}, status_code=500)
 
 
 @app.get("/api/repos")

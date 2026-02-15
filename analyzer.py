@@ -35,12 +35,29 @@ Workflow:
 3. complexity — складність налаштування (1=plug-and-play, 10=потрібен досвідчений розробник)
 4. scalability — масштабність (1=для одного юзера, 10=enterprise-рівень)
 
-Також:
-5. summary — короткий опис (2-3 речення українською), що робить цей workflow і кому він корисний
-6. tags — 3-5 тегів для пошуку (англійською, малі літери, одне-два слова)
+Також надай наступні поля:
+5. suggested_name — краща назва для воркфлоу, якщо поточна "{name}" є невідповідною або загальною (наприклад, "Без назви", "My workflow" тощо). Якщо назва гарна — залиш поточною.
+6. summary — короткий опис (2-3 речення українською), що робить цей workflow і кому він корисний.
+7. tags — 3-5 тегів для пошуку (англійською, малі літери, одне-два слова).
+8. use_cases — список з 2-3 конкретних бізнес-сценаріїв застосування українською.
+9. target_audience — хто є основною цільовою аудиторією (маркетологи, розробники, власники бізнесу тощо) українською.
+10. integrations_summary — людський опис того, які сервіси з'єднуються (наприклад, "Інтегрує Telegram з Google Sheets та OpenAI") українською.
+11. difficulty_level — рівень складності (одне слово: "beginner", "intermediate" або "advanced").
 
 Відповідь ТІЛЬКИ валідний JSON:
-{{"usefulness": N, "universality": N, "complexity": N, "scalability": N, "summary": "...", "tags": ["tag1", "tag2"]}}"""
+{{
+  "usefulness": N, 
+  "universality": N, 
+  "complexity": N, 
+  "scalability": N, 
+  "suggested_name": "...",
+  "summary": "...", 
+  "tags": ["tag1", "tag2"],
+  "use_cases": ["...", "..."],
+  "target_audience": "...",
+  "integrations_summary": "...",
+  "difficulty_level": "..."
+}}"""
 
 
 def _build_prompt(wf: dict) -> str:
@@ -93,8 +110,17 @@ async def analyze_workflow(wf: dict) -> dict:
 
         result.setdefault("summary", "")
         result.setdefault("tags", [])
+        result.setdefault("use_cases", [])
+        result.setdefault("target_audience", "")
+        result.setdefault("integrations_summary", "")
+        result.setdefault("difficulty_level", "intermediate")
+        result.setdefault("suggested_name", wf.get("name", ""))
+
         if isinstance(result["tags"], str):
             result["tags"] = [t.strip() for t in result["tags"].split(",")]
+        
+        if isinstance(result["use_cases"], str):
+            result["use_cases"] = [c.strip() for c in result["use_cases"].split(",")]
 
         return result
 
@@ -138,7 +164,28 @@ async def analyze_and_save(wf_id: int) -> dict:
         scalability=result["scalability"],
         summary=result["summary"],
         tags=result["tags"],
+        use_cases=result["use_cases"],
+        target_audience=result["target_audience"],
+        integrations_summary=result["integrations_summary"],
+        difficulty_level=result["difficulty_level"]
     )
+
+    # Update name if suggested and current name is generic
+    suggested_name = result.get("suggested_name")
+    current_name = wf.get("name", "")
+    generic_names = ["Без назви", "My workflow", "Untitled", "New workflow", "workflow", ""]
+    
+    if suggested_name and suggested_name != current_name:
+        is_generic = current_name in generic_names or not current_name
+        if is_generic:
+            try:
+                from database import get_db
+                conn = get_db()
+                conn.execute("UPDATE workflows SET name = ? WHERE id = ?", (suggested_name, wf_id))
+                conn.commit()
+                logger.info(f"Renamed workflow {wf_id}: '{current_name}' -> '{suggested_name}'")
+            except Exception as e:
+                logger.error(f"Failed to rename workflow {wf_id}: {e}")
 
     return {
         "status": "ok",
@@ -183,6 +230,10 @@ async def analyze_batch(limit: int = 50) -> dict:
                 scalability=result["scalability"],
                 summary=result["summary"],
                 tags=result["tags"],
+                use_cases=result["use_cases"],
+                target_audience=result["target_audience"],
+                integrations_summary=result["integrations_summary"],
+                difficulty_level=result["difficulty_level"]
             )
             analyzed += 1
             logger.info(f"Analyzed {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")

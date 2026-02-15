@@ -45,6 +45,10 @@ def init_db():
             ai_scalability INTEGER DEFAULT 0,
             ai_summary TEXT DEFAULT '',
             ai_tags TEXT DEFAULT '[]',
+            ai_use_cases TEXT DEFAULT '[]',
+            ai_target_audience TEXT DEFAULT '',
+            ai_integrations_summary TEXT DEFAULT '',
+            ai_difficulty_level TEXT DEFAULT '',
             ai_analyzed_at TEXT DEFAULT ''
         );
 
@@ -74,27 +78,27 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_wc_name ON workflow_categories(category_name);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS workflows_fts USING fts5(
-            name, description, nodes, categories,
+            name, description, nodes, categories, ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
             content='workflows',
             content_rowid='id',
             tokenize='unicode61'
         );
 
         CREATE TRIGGER IF NOT EXISTS workflows_ai AFTER INSERT ON workflows BEGIN
-            INSERT INTO workflows_fts(rowid, name, description, nodes, categories)
-            VALUES (new.id, new.name, new.description, new.nodes, new.categories);
+            INSERT INTO workflows_fts(rowid, name, description, nodes, categories, ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary)
+            VALUES (new.id, new.name, new.description, new.nodes, new.categories, new.ai_summary, new.ai_tags, new.ai_use_cases, new.ai_target_audience, new.ai_integrations_summary);
         END;
 
         CREATE TRIGGER IF NOT EXISTS workflows_ad AFTER DELETE ON workflows BEGIN
-            INSERT INTO workflows_fts(workflows_fts, rowid, name, description, nodes, categories)
-            VALUES ('delete', old.id, old.name, old.description, old.nodes, old.categories);
+            INSERT INTO workflows_fts(workflows_fts, rowid, name, description, nodes, categories, ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary)
+            VALUES ('delete', old.id, old.name, old.description, old.nodes, old.categories, old.ai_summary, old.ai_tags, old.ai_use_cases, old.ai_target_audience, old.ai_integrations_summary);
         END;
 
         CREATE TRIGGER IF NOT EXISTS workflows_au AFTER UPDATE ON workflows BEGIN
-            INSERT INTO workflows_fts(workflows_fts, rowid, name, description, nodes, categories)
-            VALUES ('delete', old.id, old.name, old.description, old.nodes, old.categories);
-            INSERT INTO workflows_fts(rowid, name, description, nodes, categories)
-            VALUES (new.id, new.name, new.description, new.nodes, new.categories);
+            INSERT INTO workflows_fts(workflows_fts, rowid, name, description, nodes, categories, ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary)
+            VALUES ('delete', old.id, old.name, old.description, old.nodes, old.categories, old.ai_summary, old.ai_tags, old.ai_use_cases, old.ai_target_audience, old.ai_integrations_summary);
+            INSERT INTO workflows_fts(rowid, name, description, nodes, categories, ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary)
+            VALUES (new.id, new.name, new.description, new.nodes, new.categories, new.ai_summary, new.ai_tags, new.ai_use_cases, new.ai_target_audience, new.ai_integrations_summary);
         END;
     """)
     conn.commit()
@@ -114,6 +118,10 @@ def _migrate_ai_columns():
         "ai_scalability": "INTEGER DEFAULT 0",
         "ai_summary": "TEXT DEFAULT ''",
         "ai_tags": "TEXT DEFAULT '[]'",
+        "ai_use_cases": "TEXT DEFAULT '[]'",
+        "ai_target_audience": "TEXT DEFAULT ''",
+        "ai_integrations_summary": "TEXT DEFAULT ''",
+        "ai_difficulty_level": "TEXT DEFAULT ''",
         "ai_analyzed_at": "TEXT DEFAULT ''",
     }
     for col, col_type in ai_columns.items():
@@ -250,7 +258,8 @@ def search_workflows(query="", category="", node="", page=1, per_page=24,
     rows = conn.execute(f"""
         SELECT w.id, w.name, w.description, w.nodes, w.categories, w.node_count,
                w.trigger_type, w.source_url, w.source_repo, w.added_at,
-               w.ai_usefulness, w.ai_complexity, w.ai_summary
+               w.ai_usefulness, w.ai_complexity, w.ai_summary,
+               w.ai_use_cases, w.ai_target_audience, w.ai_integrations_summary, w.ai_difficulty_level
         FROM workflows w {where}
         ORDER BY {order_by}
         LIMIT ? OFFSET ?
@@ -302,17 +311,24 @@ def get_stats():
     }
 
 
-def update_workflow_ai(wf_id, usefulness, universality, complexity, scalability, summary, tags):
+def update_workflow_ai(wf_id, usefulness, universality, complexity, scalability, summary, tags, 
+                       use_cases=None, target_audience=None, integrations_summary=None, difficulty_level=None):
     """Update AI analysis scores for a workflow."""
     conn = get_db()
     conn.execute("""
         UPDATE workflows SET
             ai_usefulness = ?, ai_universality = ?, ai_complexity = ?,
             ai_scalability = ?, ai_summary = ?, ai_tags = ?,
-            ai_analyzed_at = ?
+            ai_use_cases = ?, ai_target_audience = ?, ai_integrations_summary = ?, 
+            ai_difficulty_level = ?, ai_analyzed_at = ?
         WHERE id = ?
     """, (usefulness, universality, complexity, scalability, summary,
-          json.dumps(tags, ensure_ascii=False), datetime.utcnow().isoformat(), wf_id))
+          json.dumps(tags, ensure_ascii=False), 
+          json.dumps(use_cases or [], ensure_ascii=False),
+          target_audience or "",
+          integrations_summary or "",
+          difficulty_level or "",
+          datetime.utcnow().isoformat(), wf_id))
     conn.commit()
 
 
