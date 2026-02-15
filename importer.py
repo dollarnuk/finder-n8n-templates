@@ -186,13 +186,6 @@ async def import_from_json(json_str: str, source_url: str = "", source_repo: str
         json_hash=parsed["json_hash"],
     )
     if wf_id:
-        if analyze:
-            try:
-                from analyzer import analyze_and_save
-                await analyze_and_save(wf_id)
-            except Exception as e:
-                logger.error(f"AI analysis failed for imported workflow {wf_id}: {e}")
-        
         return {"status": "ok", "id": wf_id, "name": parsed["name"]}
     else:
         return {"status": "duplicate", "name": parsed["name"]}
@@ -230,23 +223,6 @@ async def import_from_directory(dir_path: str, source_repo: str = "", analyze: b
     logger.info(f"Parsed {len(batch)} workflows, {errors} errors. Inserting into DB...")
 
     imported, duplicates = insert_workflows_batch(batch)
-
-    # Trigger AI analysis for new ones if requested
-    if analyze and imported > 0:
-        logger.info(f"Triggering AI analysis for {imported} imported workflows...")
-        from database import get_db
-        conn = get_db()
-        # Find just imported IDs based on their hashes
-        hashes = [wf["json_hash"] for wf in batch]
-        placeholders = ",".join(["?"] * len(hashes))
-        rows = conn.execute(f"SELECT id FROM workflows WHERE json_hash IN ({placeholders})", hashes).fetchall()
-        for row in rows:
-            try:
-                from analyzer import analyze_and_save
-                await analyze_and_save(row["id"])
-                await asyncio.sleep(1.0) # Rate limiting for Gemini free tier
-            except Exception as e:
-                logger.error(f"AI batch analysis error for {row['id']}: {e}")
 
     logger.info(f"Import complete: {imported} new, {duplicates} duplicates, {errors} errors")
 
@@ -389,21 +365,6 @@ async def _import_github_dir(url: str, analyze: bool = False) -> dict:
         imported += new
         duplicates += dups
     
-    # Trigger AI analysis for the whole repo if requested
-    if analyze and imported > 0:
-        logger.info(f"Triggering AI analysis for {imported} imported GitHub workflows...")
-        from database import get_db
-        from analyzer import analyze_and_save
-        conn = get_db()
-        # Find imported IDs from this repo
-        rows = conn.execute("SELECT id FROM workflows WHERE source_repo = ? AND ai_analyzed_at = ''", (repo_url,)).fetchall()
-        for row in rows:
-            try:
-                await analyze_and_save(row["id"])
-                await asyncio.sleep(1.0)
-            except Exception as e:
-                logger.error(f"AI batch analysis error: {e}")
-
     logger.info(f"GitHub import complete: {imported} new, {duplicates} dup, {errors} err out of {total_json}")
 
     # Register repo for sync

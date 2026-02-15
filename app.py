@@ -4,7 +4,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response, HTTPException, Form, UploadFile, File
+from fastapi import FastAPI, Request, Response, HTTPException, Form, UploadFile, File, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -242,10 +242,14 @@ async def api_delete_workflow(request: Request, wf_id: int):
 
 
 @app.post("/api/import/url")
-async def api_import_url(request: Request, url: str = Form(...)):
+async def api_import_url(request: Request, background_tasks: BackgroundTasks, url: str = Form(...)):
     require_auth(request, admin_only=True)
     try:
-        result = await import_from_url(url, analyze=True)
+        # Import is now fast (no blocking AI)
+        result = await import_from_url(url, analyze=False)
+        if result.get("status") == "ok":
+            # Schedule AI analysis in background
+            background_tasks.add_task(analyze_batch, limit=50)
         return JSONResponse(result)
     except ValueError as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
@@ -255,10 +259,12 @@ async def api_import_url(request: Request, url: str = Form(...)):
 
 
 @app.post("/api/import/json")
-async def api_import_json(request: Request, json_text: str = Form(...), name: str = Form("")):
+async def api_import_json(request: Request, background_tasks: BackgroundTasks, json_text: str = Form(...), name: str = Form("")):
     require_auth(request, admin_only=True)
     try:
-        result = await import_from_json(json_text, analyze=True)
+        result = await import_from_json(json_text, analyze=False)
+        if result.get("status") == "ok":
+            background_tasks.add_task(analyze_batch, limit=50)
         return JSONResponse(result)
     except ValueError as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
@@ -268,24 +274,31 @@ async def api_import_json(request: Request, json_text: str = Form(...), name: st
 
 
 @app.post("/api/import/file")
-async def api_import_file(request: Request, file: UploadFile = File(...)):
+async def api_import_file(request: Request, background_tasks: BackgroundTasks, files: list[UploadFile] = File(...)):
     require_auth(request, admin_only=True)
-    try:
-        content = await file.read()
-        result = await import_from_json(content.decode("utf-8"), source_url=f"upload:{file.filename}", analyze=True)
-        return JSONResponse(result)
-    except ValueError as e:
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
-    except Exception as e:
-        logger.error(f"File import error: {e}")
-        return JSONResponse({"status": "error", "message": "Внутрішня помилка сервера"}, status_code=500)
+    results = []
+    for file in files:
+        try:
+            content = await file.read()
+            res = await import_from_json(content.decode("utf-8"), source_url=f"upload:{file.filename}", analyze=False)
+            results.append({"name": file.filename, "status": res["status"]})
+        except Exception as e:
+            results.append({"name": file.filename, "status": "error", "message": str(e)})
+    
+    # Schedule background analysis if anything was imported
+    if any(r["status"] == "ok" for r in results):
+        background_tasks.add_task(analyze_batch, limit=50)
+        
+    return JSONResponse({"status": "ok", "results": results})
 
 
 @app.post("/api/import/local")
-async def api_import_local(request: Request, directory: str = Form(...)):
+async def api_import_local(request: Request, background_tasks: BackgroundTasks, directory: str = Form(...)):
     require_auth(request, admin_only=True)
     try:
-        result = await import_from_directory(directory, analyze=True)
+        result = await import_from_directory(directory, analyze=False)
+        if result.get("status") == "ok" and result.get("imported", 0) > 0:
+            background_tasks.add_task(analyze_batch, limit=50)
         return JSONResponse(result)
     except ValueError as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
@@ -302,20 +315,25 @@ async def api_get_repos(request: Request):
 
 
 @app.post("/api/repos/sync/{repo_id}")
-async def api_sync_repo(request: Request, repo_id: int):
+async def api_sync_repo(request: Request, background_tasks: BackgroundTasks, repo_id: int):
     require_auth(request, admin_only=True)
     repos = get_github_repos()
     repo = next((r for r in repos if r["id"] == repo_id), None)
     if not repo:
         raise HTTPException(status_code=404)
     result = await sync_github_repo(repo["repo_url"])
+    if result.get("status") == "ok" and result.get("imported", 0) > 0:
+        background_tasks.add_task(analyze_batch, limit=50)
     return JSONResponse(result)
 
 
 @app.post("/api/repos/sync-all")
-async def api_sync_all(request: Request):
+async def api_sync_all(request: Request, background_tasks: BackgroundTasks):
     require_auth(request, admin_only=True)
     results = await sync_all_repos()
+    # If any repo had new workflows, analyze them
+    if any(r.get("imported", 0) > 0 for r in results if isinstance(r, dict)):
+        background_tasks.add_task(analyze_batch, limit=50)
     return JSONResponse(results)
 
 

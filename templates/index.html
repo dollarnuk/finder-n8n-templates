@@ -2009,7 +2009,7 @@
       const r = await fetch('/api/import/url', { method: 'POST', body: fd });
       const data = await r.json();
       if (data.imported !== undefined) {
-        toast(`Імпортовано: ${data.imported}`, 'success');
+        toast(`Імпортовано: ${data.imported}. AI-аналіз запущено у фоні...`, 'success');
       }
       document.getElementById('newRepoUrl').value = '';
       loadRepos(); loadStats(); doSearch(); reloadFilters();
@@ -2019,14 +2019,14 @@
       toast('Синхронізую...', 'info');
       const r = await fetch(`/api/repos/sync/${id}`, { method: 'POST' });
       const data = await r.json();
-      toast(`Синхр: +${data.imported || 0} нових`, 'success');
+      toast(`Синхр: +${data.imported || 0} нових. AI-аналіз запущено у фоні...`, 'success');
       loadRepos(); loadStats(); doSearch();
     }
 
     async function doSyncAll() {
       toast('Синхронізую всі репо...', 'info');
       await fetch('/api/repos/sync-all', { method: 'POST' });
-      toast('Готово!', 'success');
+      toast('Готово! AI-аналіз запущено у фовному режимі...', 'success');
       loadRepos(); loadStats(); doSearch();
     }
 
