@@ -3007,8 +3007,13 @@
       try {
         const r = await fetch('/api/admin/users');
         const data = await r.json();
+
+        if (!r.ok) {
+          throw new Error(data.message || data.detail || 'Status ' + r.status);
+        }
+
         list.innerHTML = '';
-        if (!data || data.length === 0) {
+        if (!data || !Array.isArray(data) || data.length === 0) {
           list.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted)" data-i18n="userTableEmpty">${i18n[currentLang].userTableEmpty}</td></tr>`;
           document.getElementById('adminTotalUsers').textContent = '0';
           document.getElementById('adminProUsers').textContent = '0';

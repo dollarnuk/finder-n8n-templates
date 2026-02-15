@@ -4,6 +4,12 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from fastapi import FastAPI, Request, Response, HTTPException, Form, UploadFile, File, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -51,7 +57,6 @@ def generate_wfp_signature(data_list):
         hashlib.md5
     ).hexdigest()
 
-oauth = OAuth()
 oauth.register(
     name='google',
     client_id=GOOGLE_CLIENT_ID,
@@ -63,6 +68,7 @@ oauth.register(
 )
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "goodstaffshop@gmail.com")
+logger.info(f"[Init] Admin email set to: {ADMIN_EMAIL}")
 
 
 async def periodic_sync():
@@ -595,13 +601,26 @@ async def api_admin_analysis_status(request: Request):
 
 @app.get("/api/admin/users")
 async def api_admin_users(request: Request):
-    require_auth(request, admin_only=True)
     try:
+        require_auth(request, admin_only=True)
+    except HTTPException as he:
+        # Rethrow known auth errors since they are handled by FastAPI correctly
+        raise he
+    except Exception as e:
+        logger.error(f"Auth check error for admin users: {e}")
+        return JSONResponse({"status": "error", "message": f"Auth error: {str(e)}"}, status_code=403)
+
+    try:
+        from database import get_admin_users_report
         users = get_admin_users_report()
         return JSONResponse(users)
     except Exception as e:
         logger.error(f"Get admin users error: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+        # Return a meaningful error to the frontend
+        return JSONResponse({
+            "status": "error", 
+            "message": f"Database error: {str(e)}"
+        }, status_code=500)
 
 
 # ==================== AI Chat Search ====================

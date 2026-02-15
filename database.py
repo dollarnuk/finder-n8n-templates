@@ -25,8 +25,10 @@ def get_db():
 
 def init_db():
     conn = get_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS workflows (
+    
+    # 1. Essential Tables
+    statements = [
+        """CREATE TABLE IF NOT EXISTS workflows (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             description TEXT DEFAULT '',
@@ -55,100 +57,49 @@ def init_db():
             ai_integrations_summary_en TEXT DEFAULT '',
             ai_difficulty_level TEXT DEFAULT '',
             ai_analyzed_at TEXT DEFAULT ''
-        );
-
-        CREATE TABLE IF NOT EXISTS github_repos (
+        )""",
+        """CREATE TABLE IF NOT EXISTS github_repos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             repo_url TEXT UNIQUE NOT NULL,
             last_synced TEXT,
             workflow_count INTEGER DEFAULT 0,
             enabled INTEGER DEFAULT 1
-        );
-
-        CREATE TABLE IF NOT EXISTS workflow_nodes (
+        )""",
+        """CREATE TABLE IF NOT EXISTS workflow_nodes (
             workflow_id INTEGER NOT NULL,
             node_name TEXT NOT NULL,
             FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
             UNIQUE(workflow_id, node_name)
-        );
-
-        CREATE TABLE IF NOT EXISTS workflow_categories (
+        )""",
+        """CREATE TABLE IF NOT EXISTS workflow_categories (
             workflow_id INTEGER NOT NULL,
             category_name TEXT NOT NULL,
             FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
             UNIQUE(workflow_id, category_name)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_wn_name ON workflow_nodes(node_name);
-        CREATE INDEX IF NOT EXISTS idx_wc_name ON workflow_categories(category_name);
-
-        CREATE VIRTUAL TABLE IF NOT EXISTS workflows_fts USING fts5(
-            name, description, nodes, categories, 
-            ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
-            ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en,
-            content='workflows',
-            content_rowid='id',
-            tokenize='unicode61'
-        );
-
-        CREATE TRIGGER IF NOT EXISTS workflows_ai AFTER INSERT ON workflows BEGIN
-            INSERT INTO workflows_fts(rowid, name, description, nodes, categories, 
-                ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
-                ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en)
-            VALUES (new.id, new.name, new.description, new.nodes, new.categories, 
-                new.ai_summary, new.ai_tags, new.ai_use_cases, new.ai_target_audience, new.ai_integrations_summary,
-                new.ai_summary_en, new.ai_use_cases_en, new.ai_target_audience_en, new.ai_integrations_summary_en);
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS workflows_ad AFTER DELETE ON workflows BEGIN
-            INSERT INTO workflows_fts(workflows_fts, rowid, name, description, nodes, categories, 
-                ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
-                ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en)
-            VALUES ('delete', old.id, old.name, old.description, old.nodes, old.categories, 
-                old.ai_summary, old.ai_tags, old.ai_use_cases, old.ai_target_audience, old.ai_integrations_summary,
-                old.ai_summary_en, old.ai_use_cases_en, old.ai_target_audience_en, old.ai_integrations_summary_en);
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS workflows_au AFTER UPDATE ON workflows BEGIN
-            INSERT INTO workflows_fts(workflows_fts, rowid, name, description, nodes, categories, 
-                ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
-                ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en)
-            VALUES ('delete', old.id, old.name, old.description, old.nodes, old.categories, 
-                old.ai_summary, old.ai_tags, old.ai_use_cases, old.ai_target_audience, old.ai_integrations_summary,
-                old.ai_summary_en, old.ai_use_cases_en, old.ai_target_audience_en, old.ai_integrations_summary_en);
-            INSERT INTO workflows_fts(rowid, name, description, nodes, categories, 
-                ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
-                ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en)
-            VALUES (new.id, new.name, new.description, new.nodes, new.categories, 
-                new.ai_summary, new.ai_tags, new.ai_use_cases, new.ai_target_audience, new.ai_integrations_summary,
-                new.ai_summary_en, new.ai_use_cases_en, new.ai_target_audience_en, new.ai_integrations_summary_en);
-        END;
-        CREATE TABLE IF NOT EXISTS users (
+        )""",
+        """CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
             name TEXT,
             picture TEXT,
             role TEXT DEFAULT 'user',
             created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS user_usage (
+        )""",
+        """CREATE TABLE IF NOT EXISTS user_usage (
             user_id INTEGER PRIMARY KEY,
             ai_chat_count INTEGER DEFAULT 0,
             last_reset_at TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS subscriptions (
+        )""",
+        """CREATE TABLE IF NOT EXISTS subscriptions (
             user_id INTEGER PRIMARY KEY,
             payment_customer_id TEXT,
             payment_sub_id TEXT,
             status TEXT DEFAULT 'inactive',
             expires_at TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS payment_history (
+        )""",
+        """CREATE TABLE IF NOT EXISTS payment_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             payment_order_id TEXT,
@@ -157,9 +108,64 @@ def init_db():
             status TEXT,
             created_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-    """)
+        )"""
+    ]
+    
+    # 2. Indices
+    statements += [
+        "CREATE INDEX IF NOT EXISTS idx_wn_name ON workflow_nodes(node_name)",
+        "CREATE INDEX IF NOT EXISTS idx_wc_name ON workflow_categories(category_name)"
+    ]
+    
+    # 3. FTS & Triggers
+    statements += [
+        """CREATE VIRTUAL TABLE IF NOT EXISTS workflows_fts USING fts5(
+            name, description, nodes, categories, 
+            ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
+            ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en,
+            content='workflows', content_rowid='id', tokenize='unicode61'
+        )""",
+        """CREATE TRIGGER IF NOT EXISTS workflows_ai AFTER INSERT ON workflows BEGIN
+            INSERT INTO workflows_fts(rowid, name, description, nodes, categories, 
+                ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
+                ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en)
+            VALUES (new.id, new.name, new.description, new.nodes, new.categories, 
+                new.ai_summary, new.ai_tags, new.ai_use_cases, new.ai_target_audience, new.ai_integrations_summary,
+                new.ai_summary_en, new.ai_use_cases_en, new.ai_target_audience_en, new.ai_integrations_summary_en);
+        END""",
+        """CREATE TRIGGER IF NOT EXISTS workflows_ad AFTER DELETE ON workflows BEGIN
+            INSERT INTO workflows_fts(workflows_fts, rowid, name, description, nodes, categories, 
+                ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
+                ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en)
+            VALUES ('delete', old.id, old.name, old.description, old.nodes, old.categories, 
+                old.ai_summary, old.ai_tags, old.ai_use_cases, old.ai_target_audience, old.ai_integrations_summary,
+                old.ai_summary_en, old.ai_use_cases_en, old.ai_target_audience_en, old.ai_integrations_summary_en);
+        END""",
+        """CREATE TRIGGER IF NOT EXISTS workflows_au AFTER UPDATE ON workflows BEGIN
+            INSERT INTO workflows_fts(workflows_fts, rowid, name, description, nodes, categories, 
+                ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
+                ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en)
+            VALUES ('delete', old.id, old.name, old.description, old.nodes, old.categories, 
+                old.ai_summary, old.ai_tags, old.ai_use_cases, old.ai_target_audience, old.ai_integrations_summary,
+                old.ai_summary_en, old.ai_use_cases_en, old.ai_target_audience_en, old.ai_integrations_summary_en);
+            INSERT INTO workflows_fts(rowid, name, description, nodes, categories, 
+                ai_summary, ai_tags, ai_use_cases, ai_target_audience, ai_integrations_summary,
+                ai_summary_en, ai_use_cases_en, ai_target_audience_en, ai_integrations_summary_en)
+            VALUES (new.id, new.name, new.description, new.nodes, new.categories, 
+                new.ai_summary, new.ai_tags, new.ai_use_cases, new.ai_target_audience, new.ai_integrations_summary,
+                new.ai_summary_en, new.ai_use_cases_en, new.ai_target_audience_en, new.ai_integrations_summary_en);
+        END"""
+    ]
+
+    for sql in statements:
+        try:
+            conn.execute(sql)
+        except Exception as e:
+            print(f"[DB Init Item Error] {e}")
+
     conn.commit()
+    print("[DB] Schema verification complete")
+    
     _migrate_ai_columns()
     _migrate_lookup_tables()
     _migrate_user_tables()
