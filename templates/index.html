@@ -111,7 +111,7 @@
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
 
     /* ===== Language Switcher ===== */
@@ -143,6 +143,42 @@
     .lang-btn.active {
       background: var(--accent);
       color: white;
+    }
+
+    /* ===== Premium Buttons ===== */
+    .btn-upgrade-premium {
+      background: linear-gradient(135deg, #f97316, #d946ef) !important;
+      color: white !important;
+      border: none !important;
+      font-weight: 700 !important;
+      box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+      padding: 6px 14px;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+    }
+
+    .btn-upgrade-premium:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 25px rgba(249, 115, 22, 0.5);
+    }
+
+    .pro-status-badge {
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      color: var(--accent2);
+      font-weight: 700;
+      font-size: 11px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .pro-status-badge:hover {
+      background: rgba(6, 182, 212, 0.2);
+      border-color: var(--accent2);
     }
 
     /* ===== Buttons ===== */
@@ -227,6 +263,7 @@
       font-weight: 700;
       letter-spacing: -1px;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
+      background-clip: text;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
@@ -391,6 +428,7 @@
       line-height: 1.3;
       display: -webkit-box;
       -webkit-line-clamp: 2;
+      line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
@@ -442,6 +480,7 @@
       line-height: 1.4;
       display: -webkit-box;
       -webkit-line-clamp: 2;
+      line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
@@ -531,6 +570,7 @@
       font-size: 24px;
       font-weight: 700;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
+      background-clip: text;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
@@ -1245,6 +1285,7 @@
           <div class="lang-btn" id="lang-uk" onclick="setLang('uk')">UA</div>
           <div class="lang-btn" id="lang-en" onclick="setLang('en')">EN</div>
         </div>
+        <div id="premiumHeaderBtn" style="display:none"></div>
         <div id="authSection">
           <button class="btn" onclick="openModal('authModal')" data-i18n="loginBtn">Увійти</button>
         </div>
@@ -1518,27 +1559,55 @@
 
   <!-- ===== UPGRADE PRO MODAL ===== -->
   <div class="modal-overlay" id="upgradeModal">
-    <div class="modal" style="max-width:420px">
+    <div class="modal" style="max-width:480px">
       <div class="modal-header">
         <div class="modal-title" data-i18n="upgradeModalTitle">Апгрейд до PRO</div>
         <button class="modal-close" onclick="closeModal('upgradeModal')">✕</button>
       </div>
-      <div class="modal-body" style="text-align:center">
-        <div style="font-size:48px; margin:20px 0">🚀</div>
-        <h3 style="margin-bottom:16px" data-i18n="upgradePrice">Лише $1 / місяць</h3>
-        <ul style="text-align:left; margin-bottom:24px; padding-left:20px; color:var(--text-dim); line-height:1.8">
-          <li data-i18n="upgradeFeature1">⚡ Необмежений AI-пошук</li>
-          <li data-i18n="upgradeFeature2">🔍 Глибокі сценарії використання</li>
-          <li data-i18n="upgradeFeature3">💎 Пріоритетна підтримка</li>
-          <li data-i18n="upgradeFeature4">🌍 Доступ до Hub з будь-якої точки світу</li>
-        </ul>
-        <button class="btn btn-primary" style="width:100%; height:48px; font-weight:600"
+      <div class="modal-body">
+        <div style="text-align:center; padding: 10px 0;">
+          <div style="font-size:54px; margin-bottom:15px; filter: drop-shadow(0 0 10px var(--accent-glow))">🚀</div>
+          <h2 style="margin-bottom:8px" data-i18n="upgradePrice">40 грн / місяць</h2>
+          <p style="color:var(--text-muted); font-size:13px; margin-bottom:24px" data-i18n="upgradePriceSubtext">Менше
+            ніж чашка кави за безлімітний інтелект</p>
+        </div>
+
+        <div class="detail-section"
+          style="background:var(--bg-surface); padding:16px; border-radius:12px; margin-bottom:20px; border:1px solid var(--border)">
+          <h4 style="color:var(--accent); margin-bottom:8px; display:flex; align-items:center; gap:8px">
+            <span>❓</span> <span data-i18n="upgradeWhy">Навіщо це мені?</span>
+          </h4>
+          <p style="font-size:13px; color:var(--text-dim); line-height:1.6" data-i18n="upgradeWhyText">
+            Ви отримуєте необмежений AI-пошук, який розуміє ваші складні запити та знаходить найкращі рішення серед
+            1000+ воркфлоу, економлячи години ручної розробки.
+          </p>
+        </div>
+
+        <div style="margin-bottom:24px">
+          <ul style="list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:12px">
+            <li style="font-size:13px; display:flex; align-items:center; gap:8px"><span
+                style="color:var(--success)">✔</span> <span data-i18n="upgradeFeature1">Безлімітний пошук</span></li>
+            <li style="font-size:13px; display:flex; align-items:center; gap:8px"><span
+                style="color:var(--success)">✔</span> <span data-i18n="upgradeFeature2">Глибокий аналіз</span></li>
+            <li style="font-size:13px; display:flex; align-items:center; gap:8px"><span
+                style="color:var(--success)">✔</span> <span data-i18n="upgradeFeature3">Пріоритетна підтримка</span>
+            </li>
+            <li style="font-size:13px; display:flex; align-items:center; gap:8px"><span
+                style="color:var(--success)">✔</span> <span data-i18n="upgradeFeature4">Преміум бейдж</span></li>
+          </ul>
+        </div>
+
+        <div
+          style="margin-bottom:24px; padding:12px; background:rgba(6,182,212,0.05); border-left:3px solid var(--accent2); border-radius:4px">
+          <h4 style="font-size:13px; margin-bottom:4px" data-i18n="upgradeHow">Як це працює?</h4>
+          <p style="font-size:12px; color:var(--text-muted)" data-i18n="upgradeHowText">Миттєва активація після оплати.
+            Безпеку гарантує WayForPay.</p>
+        </div>
+
+        <button class="btn btn-primary btn-upgrade-premium" style="width:100%; height:52px; font-size:15px;"
           onclick="startWayForPayCheckout()" data-i18n="upgradeAction">
-          Оформити підписку через WayForPay
+          Оформити PRO підписку
         </button>
-        <p style="font-size:11px; color:var(--text-muted); margin-top:16px">Оплату обробляє WayForPay. Безпечно та
-          надійно.
-        </p>
       </div>
     </div>
   </div>
@@ -1606,6 +1675,21 @@
         statsRepos: "Репозиторіїв",
         statsNodes: "Унікальних нод",
         statsAnalyzed: "Проаналізовано",
+        getProBtn: "⚡ GET PRO",
+        proActiveBtn: "💎 PRO АКТИВНО",
+        upgradeModalTitle: "Апгрейд до PRO",
+        upgradeFeature1: "⚡ Безлімітний пошук",
+        upgradeFeature2: "🔍 Глибокий аналіз",
+        upgradeFeature3: "💎 Пріоритетна підтримка",
+        upgradeFeature4: "🌍 Преміум бейдж",
+        upgradePrice: "40 грн / місяць",
+        upgradePriceSubtext: "Менше ніж чашка кави за безлімітний інтелект",
+        upgradeWhy: "Навіщо це мені?",
+        upgradeWhyText: "Безлімітний AI-пошук дозволяє миттєво знаходити рішення серед 1000+ воркфлоу, аналізувати їх структуру та економити до 80% часу на розробку сценаріїв n8n.",
+        upgradeWhat: "Що ви отримаєте?",
+        upgradeHow: "Як це працює?",
+        upgradeHowText: "Миттєва активація після оплати. Безпеку транзакцій гарантує WayForPay.",
+        upgradeAction: "Оформити PRO підписку",
         statsScore: "RAI (Avg Useful)",
         emptyWorkflows: "Воркфлоу не знайдено",
         viewBtn: "Переглянути",
@@ -1865,12 +1949,20 @@
         aiSearchLimit: "Searches: {count}/3",
         proUnlimited: "Unlimited AI",
         upgradeBtn: "Upgrade to PRO ($1/mo)",
+        getProBtn: "⚡ GET PRO",
+        proActiveBtn: "💎 PRO ACTIVE",
         upgradeModalTitle: "Upgrade to PRO",
         upgradeFeature1: "⚡ Unlimited AI Search",
         upgradeFeature2: "🔍 Deep Use Case Scenarios",
         upgradeFeature3: "💎 Priority Support",
-        upgradeFeature4: "🌍 Access Hub from anywhere",
-        upgradePrice: "Only ~40 UAH ($1) / month",
+        upgradeFeature4: "🌍 Premium Badge",
+        upgradePrice: "40 UAH (~$1) / month",
+        upgradePriceSubtext: "Less than a cup of coffee for unlimited intelligence",
+        upgradeWhy: "Why go PRO?",
+        upgradeWhyText: "Unlimited AI search lets you instantly find solutions among 1000+ workflows, analyze their structure, and save up to 80% of time spent on developing your own scenarios.",
+        upgradeWhat: "What you get?",
+        upgradeHow: "How it works?",
+        upgradeHowText: "Instant activation after payment. Security guaranteed by WayForPay.",
         upgradeAction: "Subscribe with WayForPay",
         historyTitle: "Payment History",
         limitReachedTitle: "Limit Reached",
@@ -2020,6 +2112,24 @@
 
           if (data.is_admin) {
             // document.getElementById('adminReposBtn').style.display = 'inline-flex'; // This element doesn't exist in the current HTML
+          }
+
+          // Premium header button logic
+          const premiumBtn = document.getElementById('premiumHeaderBtn');
+          if (data.is_admin || (data.usage && data.usage.sub_status === 'active')) {
+            premiumBtn.style.display = 'block';
+            premiumBtn.innerHTML = `
+              <div class="pro-status-badge" onclick="openProfileModal()">
+                <span>💎</span> <span data-i18n="proActiveBtn">${i18n[currentLang].proActiveBtn}</span>
+              </div>
+            `;
+          } else {
+            premiumBtn.style.display = 'block';
+            premiumBtn.innerHTML = `
+              <button class="btn btn-upgrade-premium" onclick="openModal('upgradeModal')" data-i18n="getProBtn">
+                ${i18n[currentLang].getProBtn}
+              </button>
+            `;
           }
 
           // Show Pro badge if active or admin
