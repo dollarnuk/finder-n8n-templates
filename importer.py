@@ -443,8 +443,15 @@ async def _import_google_drive(url: str, analyze: bool = False) -> dict:
     """Import from a Google Drive shared file link."""
     # Extract file ID
     file_id = ""
+    is_folder = False
+
     if "/file/d/" in url:
         parts = url.split("/file/d/")
+        if len(parts) > 1:
+            file_id = parts[1].split("/")[0].split("?")[0]
+    elif "/folders/" in url:
+        is_folder = True
+        parts = url.split("/folders/")
         if len(parts) > 1:
             file_id = parts[1].split("/")[0].split("?")[0]
     elif "id=" in url:
@@ -452,8 +459,15 @@ async def _import_google_drive(url: str, analyze: bool = False) -> dict:
         if len(parts) > 1:
             file_id = parts[1].split("&")[0]
 
+    if is_folder:
+        return {
+            "status": "error", 
+            "message": "Ви вставили посилання на ПАПКУ Google Drive. Наразі підтримуються лише посилання на ОКРЕМІ файли воркфлоу (.json). "
+                       "Щоб завантажити багато файлів одночасно, скористайтеся вкладкою «Файл» (Drag-and-Drop) або GitHub репозиторієм."
+        }
+
     if not file_id:
-        return {"status": "error", "message": "Не вдалося визначити ID файлу Google Drive. Перевірте посилання."}
+        return {"status": "error", "message": "Не вдалося визначити ID файлу Google Drive. Переконайтеся, що це пряме посилання на JSON-файл."}
 
     download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
     logger.info(f"Downloading from Google Drive: {download_url}")
