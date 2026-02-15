@@ -20,7 +20,7 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "models/gemini-flash-latest")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY, transport="rest")
 
-ANALYSIS_PROMPT = """Ти — експерт з n8n автоматизацій. Проаналізуй цей workflow та дай структуровану відповідь у JSON.
+ANALYSIS_PROMPT = """Ти — експерт з n8n автоматизацій. Проаналізуй цей workflow та дай структуровану відповідь у JSON ДВОМА МОВАМИ (українською та англійською).
 
 Workflow:
 - Назва: {name}
@@ -30,19 +30,19 @@ Workflow:
 - Тип тригера: {trigger_type}
 
 Оціни від 1 до 10:
-1. usefulness — наскільки корисний для бізнесу (1=тестовий/демо, 10=критичний бізнес-процес)
-2. universality — наскільки універсальний (1=вузькоспеціалізований, 10=підходить будь-якому бізнесу)
-3. complexity — складність налаштування (1=plug-and-play, 10=потрібен досвідчений розробник)
-4. scalability — масштабність (1=для одного юзера, 10=enterprise-рівень)
+1. usefulness — наскільки корисний для бізнесу
+2. universality — наскільки універсальний
+3. complexity — складність налаштування
+4. scalability — масштабність
 
-Також надай наступні поля:
-5. suggested_name — краща назва для воркфлоу, якщо поточна "{name}" є невідповідною або загальною (наприклад, "Без назви", "My workflow" тощо). Якщо назва гарна — залиш поточною.
-6. summary — короткий опис (2-3 речення українською), що робить цей workflow і кому він корисний.
-7. tags — 3-5 тегів для пошуку (англійською, малі літери, одне-два слова).
-8. use_cases — список з 2-3 конкретних бізнес-сценаріїв застосування українською.
-9. target_audience — хто є основною цільовою аудиторією (маркетологи, розробники, власники бізнесу тощо) українською.
-10. integrations_summary — людський опис того, які сервіси з'єднуються (наприклад, "Інтегрує Telegram з Google Sheets та OpenAI") українською.
-11. difficulty_level — рівень складності (одне слово: "beginner", "intermediate" або "advanced").
+Також надай наступні поля ДВОМА МОВАМИ:
+5. suggested_name — краща назва для воркфлоу, якщо поточна "{name}" є невідповідною.
+6. summary_uk / summary_en — короткий опис (2-3 речення).
+7. tags — 3-5 тегів (англійською).
+8. use_cases_uk / use_cases_en — список з 2-3 конкретних бізнес-сценаріїв.
+9. target_audience_uk / target_audience_en — основна цільова аудиторія.
+10. integrations_summary_uk / integrations_summary_en — людяний опис сервісів, що з'єднуються.
+11. difficulty_level — рівень складності (beginner, intermediate, advanced).
 
 Відповідь ТІЛЬКИ валідний JSON:
 {{
@@ -51,11 +51,19 @@ Workflow:
   "complexity": N, 
   "scalability": N, 
   "suggested_name": "...",
-  "summary": "...", 
+  "uk": {{
+    "summary": "...", 
+    "use_cases": ["...", "..."],
+    "target_audience": "...",
+    "integrations_summary": "..."
+  }},
+  "en": {{
+    "summary": "...", 
+    "use_cases": ["...", "..."],
+    "target_audience": "...",
+    "integrations_summary": "..."
+  }},
   "tags": ["tag1", "tag2"],
-  "use_cases": ["...", "..."],
-  "target_audience": "...",
-  "integrations_summary": "...",
   "difficulty_level": "..."
 }}"""
 
@@ -100,27 +108,21 @@ async def analyze_workflow(wf: dict) -> dict:
         raw = response.text.strip()
         result = json.loads(raw)
 
-        # Validate and clamp scores
-        for key in ("usefulness", "universality", "complexity", "scalability"):
-            try:
-                val = result.get(key, 5)
-                result[key] = max(1, min(10, int(val)))
-            except:
-                result[key] = 5
-
-        result.setdefault("summary", "")
+        result.setdefault("uk", {})
+        result.setdefault("en", {})
         result.setdefault("tags", [])
-        result.setdefault("use_cases", [])
-        result.setdefault("target_audience", "")
-        result.setdefault("integrations_summary", "")
         result.setdefault("difficulty_level", "intermediate")
         result.setdefault("suggested_name", wf.get("name", ""))
 
+        # Ensure nested structures exist
+        for lang in ("uk", "en"):
+            result[lang].setdefault("summary", "")
+            result[lang].setdefault("use_cases", [])
+            result[lang].setdefault("target_audience", "")
+            result[lang].setdefault("integrations_summary", "")
+
         if isinstance(result["tags"], str):
             result["tags"] = [t.strip() for t in result["tags"].split(",")]
-        
-        if isinstance(result["use_cases"], str):
-            result["use_cases"] = [c.strip() for c in result["use_cases"].split(",")]
 
         return result
 
@@ -162,12 +164,13 @@ async def analyze_and_save(wf_id: int) -> dict:
         universality=result["universality"],
         complexity=result["complexity"],
         scalability=result["scalability"],
-        summary=result["summary"],
+        summary=result["uk"]["summary"],
         tags=result["tags"],
-        use_cases=result["use_cases"],
-        target_audience=result["target_audience"],
-        integrations_summary=result["integrations_summary"],
-        difficulty_level=result["difficulty_level"]
+        use_cases=result["uk"]["use_cases"],
+        target_audience=result["uk"]["target_audience"],
+        integrations_summary=result["uk"]["integrations_summary"],
+        difficulty_level=result["difficulty_level"],
+        result_en=result["en"]
     )
 
     # Update name if suggested and current name is generic
@@ -228,12 +231,13 @@ async def analyze_batch(limit: int = 50) -> dict:
                 universality=result["universality"],
                 complexity=result["complexity"],
                 scalability=result["scalability"],
-                summary=result["summary"],
+                summary=result["uk"]["summary"],
                 tags=result["tags"],
-                use_cases=result["use_cases"],
-                target_audience=result["target_audience"],
-                integrations_summary=result["integrations_summary"],
-                difficulty_level=result["difficulty_level"]
+                use_cases=result["uk"]["use_cases"],
+                target_audience=result["uk"]["target_audience"],
+                integrations_summary=result["uk"]["integrations_summary"],
+                difficulty_level=result["difficulty_level"],
+                result_en=result["en"]
             )
             analyzed += 1
             logger.info(f"Analyzed {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")

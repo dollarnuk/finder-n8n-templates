@@ -114,6 +114,37 @@
       gap: 10px;
     }
 
+    /* ===== Language Switcher ===== */
+    .lang-switch-group {
+      display: flex;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+      margin-right: 4px;
+    }
+
+    .lang-btn {
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .lang-btn:hover {
+      color: var(--text);
+    }
+
+    .lang-btn.active {
+      background: var(--accent);
+      color: white;
+    }
+
     /* ===== Buttons ===== */
     .btn {
       padding: 8px 16px;
@@ -1114,35 +1145,17 @@
   <header class="header">
     <div class="header-inner">
       <a href="/" class="logo">
-        <div class="logo-icon">n8</div>
+        <div class="logo-icon">n</div>
         <span>n8n Hub</span>
       </a>
       <div class="header-actions">
-        <button class="btn btn-ghost" onclick="openReposModal()" id="reposBtn" style="display:none">
-          ⚙ Репозиторії
-        </button>
-        <button class="btn btn-primary" onclick="openImportModal()" id="importBtn" style="display:none">
-          + Імпорт
-        </button>
-
-        {% if authenticated %}
-        <div class="user-profile">
-          {% if user.picture %}
-          <img src="{{ user.picture }}" class="user-avatar" alt="Avatar">
-          {% else %}
-          <div class="user-avatar"
-            style="display:flex;align-items:center;justify-content:center;color:white;font-size:10px">
-            {{ user.name[0] | upper }}
-          </div>
-          {% endif %}
-          <span class="user-name">{{ user.name }}</span>
-          <button class="btn btn-ghost" onclick="doLogout()" style="padding:4px 8px; font-size:12px">Вийти</button>
+        <div class="lang-switch-group">
+          <div class="lang-btn" id="lang-uk" onclick="setLang('uk')">UA</div>
+          <div class="lang-btn" id="lang-en" onclick="setLang('en')">EN</div>
         </div>
-        {% else %}
-        <button class="btn btn-primary" onclick="openAuthModal()" id="loginBtn">
-          🔒 Увійти
-        </button>
-        {% endif %}
+        <div id="authSection">
+          <button class="btn" onclick="openModal('authModal')" data-i18n="loginBtn">Увійти</button>
+        </div>
       </div>
     </div>
   </header>
@@ -1151,39 +1164,40 @@
   <div class="stats-bar">
     <div class="stat-card">
       <div class="stat-value" id="statTotal">0</div>
-      <div class="stat-label">Воркфлоу</div>
+      <div class="stat-label" data-i18n="statsTotal">Воркфлоу</div>
     </div>
     <div class="stat-card">
       <div class="stat-value" id="statAnalyzed">0</div>
-      <div class="stat-label">Проаналізовано AI</div>
+      <div class="stat-label" data-i18n="statsAnalyzed">Проаналізовано AI</div>
     </div>
     <div class="stat-card">
       <div class="stat-value" id="statNodes">0</div>
-      <div class="stat-label">Унікальних нод</div>
+      <div class="stat-label" data-i18n="statsNodes">Унікальних нод</div>
     </div>
   </div>
 
   <!-- ===== SEARCH ===== -->
   <div class="search-section">
     <div class="search-row">
-      <input type="text" class="search-input" id="searchInput" placeholder="Пошук воркфлоу..." autocomplete="off">
+      <input type="text" class="search-input" id="searchInput" data-i18n="searchPlaceholder"
+        placeholder="Пошук воркфлоу..." autocomplete="off">
       <select class="filter-select" id="categoryFilter" onchange="doSearch()">
-        <option value="">Всі категорії</option>
+        <option value="" data-i18n="allCategories">Всі категорії</option>
         {% for cat in categories %}
         <option value="{{ cat }}">{{ cat }}</option>
         {% endfor %}
       </select>
       <select class="filter-select" id="nodeFilter" onchange="doSearch()">
-        <option value="">Всі ноди</option>
+        <option value="" data-i18n="allNodes">Всі ноди</option>
         {% for node in nodes %}
         <option value="{{ node }}">{{ node }}</option>
         {% endfor %}
       </select>
       <select class="filter-select" id="sortSelect" onchange="doSearch()" style="min-width:150px">
-        <option value="recent">📅 Найновіші</option>
-        <option value="usefulness">⭐ Найкращі</option>
-        <option value="complexity_asc">🟢 Найпростіші</option>
-        <option value="complexity_desc">🔴 Найскладніші</option>
+        <option value="recent" data-i18n="sortNewest">📅 Найновіші</option>
+        <option value="usefulness" data-i18n="sortPopular">⭐ Найкращі</option>
+        <option value="complexity_asc" data-i18n="sortSimple">🟢 Найпростіші</option>
+        <option value="complexity_desc" data-i18n="sortComplex">🔴 Найскладніші</option>
         <option value="nodes">📦 За нодами</option>
       </select>
       <select class="filter-select" id="minScoreFilter" onchange="doSearch()" style="min-width:120px">
@@ -1224,27 +1238,28 @@
   <div class="modal-overlay" id="importModal">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title">Імпорт воркфлоу</div>
+        <div class="modal-title" data-i18n="importModalTitle">Імпорт воркфлоу</div>
         <button class="modal-close" onclick="closeModal('importModal')">✕</button>
       </div>
       <div class="modal-body">
         <div class="import-tabs">
-          <button class="import-tab active" onclick="switchTab(this, 'tabUrl')">За посиланням</button>
-          <button class="import-tab" onclick="switchTab(this, 'tabGDrive')">Google Drive</button>
-          <button class="import-tab" onclick="switchTab(this, 'tabJson')">JSON</button>
-          <button class="import-tab" onclick="switchTab(this, 'tabFile')">Файл</button>
+          <button class="import-tab active" onclick="switchTab(this, 'tabUrl')" data-i18n="urlTab">За
+            посиланням</button>
+          <button class="import-tab" onclick="switchTab(this, 'tabGDrive')" data-i18n="driveTab">Google Drive</button>
+          <button class="import-tab" onclick="switchTab(this, 'tabJson')" data-i18n="jsonTab">JSON</button>
+          <button class="import-tab" onclick="switchTab(this, 'tabFile')" data-i18n="fileTab">Файл</button>
         </div>
 
         <div class="import-panel active" id="tabUrl">
           <div class="form-group">
             <label class="form-label">URL</label>
             <input type="text" class="form-input" id="importUrl"
-              placeholder="https://github.com/user/repo/tree/main/workflows">
+              placeholder="https://github.com/user/repo/tree/main/workflows" data-i18n="importPlaceholderUrl">
             <div class="form-hint">
               Підтримується: GitHub репо/папка, GitHub JSON файл, n8n.io/workflows/ID
             </div>
           </div>
-          <button class="btn btn-primary" onclick="doImportUrl()" id="importUrlBtn">
+          <button class="btn btn-primary" onclick="doImportUrl()" id="importUrlBtn" data-i18n="importBtnAction">
             Імпортувати
           </button>
         </div>
@@ -1258,7 +1273,7 @@
               Файл має бути доступним за посиланням (Доступ: Усі, хто має посилання).
             </div>
           </div>
-          <button class="btn btn-primary" onclick="doImportGDrive()" id="importGDriveBtn">
+          <button class="btn btn-primary" onclick="doImportGDrive()" id="importGDriveBtn" data-i18n="importBtnAction">
             Імпортувати з Диску
           </button>
         </div>
@@ -1266,9 +1281,10 @@
         <div class="import-panel" id="tabJson">
           <div class="form-group">
             <label class="form-label">JSON воркфлоу</label>
-            <textarea class="form-input" id="importJson" placeholder='{"name":"...","nodes":[...]}'></textarea>
+            <textarea class="form-input" id="importJson" placeholder='{"name":"...","nodes":[...]}'
+              data-i18n="importPlaceholderJson"></textarea>
           </div>
-          <button class="btn btn-primary" onclick="doImportJson()">
+          <button class="btn btn-primary" onclick="doImportJson()" data-i18n="importBtnAction">
             Імпортувати
           </button>
         </div>
@@ -1283,7 +1299,7 @@
             </div>
             <input type="file" class="form-input" id="importFile" accept=".json" multiple style="display:none">
           </div>
-          <button class="btn btn-primary" onclick="doImportFiles()">
+          <button class="btn btn-primary" onclick="doImportFiles()" data-i18n="importBtnAction">
             Завантажити обране
           </button>
         </div>
@@ -1321,15 +1337,15 @@
   <div class="modal-overlay" id="authModal">
     <div class="modal" style="max-width:380px">
       <div class="modal-header">
-        <div class="modal-title">Авторизація</div>
+        <div class="modal-title" data-i18n="authTitle">Авторизація</div>
         <button class="modal-close" onclick="closeModal('authModal')">✕</button>
       </div>
       <div class="modal-body">
         <div class="auth-form" style="text-align: center; padding: 20px 0;">
-          <p style="margin-bottom: 24px; color: var(--text-dim); font-size: 14px;">
+          <p style="margin-bottom: 24px; color: var(--text-dim); font-size: 14px;" data-i18n="authText">
             Увійдіть за допомогою Google, щоб отримати доступ до функцій Hub.
           </p>
-          <button class="btn-google" onclick="doGoogleLogin()">
+          <button class="btn-google" onclick="doGoogleLogin()" data-i18n="authGoogleBtn">
             <svg viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -1355,19 +1371,19 @@
   <div class="modal-overlay" id="reposModal">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title">GitHub репозиторії</div>
+        <div class="modal-title" data-i18n="reposTitle">GitHub репозиторії</div>
         <button class="modal-close" onclick="closeModal('reposModal')">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
           <div style="display:flex;gap:8px">
             <input type="text" class="form-input" id="newRepoUrl" placeholder="https://github.com/user/repo"
-              style="flex:1">
-            <button class="btn btn-primary" onclick="doAddRepo()">Додати</button>
+              data-i18n="repoPlaceholder" style="flex:1">
+            <button class="btn btn-primary" onclick="doAddRepo()" data-i18n="addBtn">Додати</button>
           </div>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-          <button class="btn btn-sm" onclick="doSyncAll()">🔄 Синхронізувати все</button>
+          <button class="btn btn-sm" onclick="doSyncAll()" data-i18n="syncAll">🔄 Синхронізувати все</button>
         </div>
         <div class="repo-list" id="repoList">
           <div class="loading">
@@ -1377,7 +1393,7 @@
 
         <!-- Admin Batch Tools -->
         <div style="margin-top:30px; padding-top:20px; border-top:2px dashed var(--border)">
-          <h4 style="margin-bottom:15px; display:flex; align-items:center; gap:8px">
+          <h4 style="margin-bottom:15px; display:flex; align-items:center; gap:8px" data-i18n="adminToolsTitle">
             ⚙️ Адмін-інструменти (Пакетна обробка)
           </h4>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
@@ -1386,7 +1402,8 @@
               <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
                 Запустить AI-аналіз для всіх воркфлоу, які ще не мають оцінок та описів.
               </p>
-              <button class="btn btn-sm" onclick="doAnalyzeAllUnanalyzed()" style="width:100%; justify-content:center">
+              <button class="btn btn-sm" onclick="doAnalyzeAllUnanalyzed()" style="width:100%; justify-content:center"
+                data-i18n="analyzeAllBtn">
                 🧠 Аналізувати все
               </button>
             </div>
@@ -1396,7 +1413,8 @@
                 ПОВНІСТЮ очистити базу даних. Усі завантажені воркфлоу будуть видалені!
               </p>
               <button class="btn btn-sm" onclick="doClearAllWorkflows()"
-                style="width:100%; justify-content:center; background:rgba(255,50,50,0.1); color:#ff5555; border-color:rgba(255,50,50,0.2)">
+                style="width:100%; justify-content:center; background:rgba(255,50,50,0.1); color:#ff5555; border-color:rgba(255,50,50,0.2)"
+                data-i18n="deleteAllBtn">
                 🗑️ Видалити все
               </button>
             </div>
@@ -1435,25 +1453,377 @@
     let currentPage = 1;
     let searchTimeout = null;
 
+    let currentLang = localStorage.getItem('hub_lang') || 'uk';
+
+    const i18n = {
+      uk: {
+        loginBtn: "Увійти",
+        importBtn: "Імпорт",
+        reposBtn: "Репозиторії",
+        searchPlaceholder: "Шукайте воркфлоу (назва, ноди, опис...)",
+        allCategories: "Всі категорії",
+        allNodes: "Всі ноди",
+        sortNewest: "Спочатку нові",
+        sortPopular: "Рейтинг корисності",
+        sortComplex: "Складність: Висока",
+        sortSimple: "Складність: Низька",
+        statsTotal: "Воркфлоу",
+        statsRepos: "Репозиторіїв",
+        statsNodes: "Унікальних нод",
+        statsAnalyzed: "Проаналізовано",
+        statsScore: "RAI (Avg Useful)",
+        emptyWorkflows: "Воркфлоу не знайдено",
+        viewBtn: "Переглянути",
+        usefulness: "Корисність",
+        complexity: "Складність",
+        scalability: "Масштабованість",
+        universality: "Універсальність",
+        difficultyBeginner: "Для новачків",
+        difficultyIntermediate: "Середній рівень",
+        difficultyAdvanced: "Просунутий",
+        nodesCount: "нод",
+        importModalTitle: "Імпорт воркфлоу",
+        fileTab: "Файл",
+        jsonTab: "JSON",
+        urlTab: "URL / GitHub",
+        driveTab: "Google Drive",
+        importPlaceholderUrl: "Посилання на GitHub папку або файл...",
+        importPlaceholderJson: "Вставте JSON контент воркфлоу тут...",
+        importBtnAction: "Імпортувати",
+        driveConnect: "Підключити Google Drive",
+        authTitle: "Авторизація",
+        authText: "Увійдіть за допомогою Google, щоб отримати доступ до функцій Hub.",
+        authGoogleBtn: "Увійти через Google",
+        reposTitle: "GitHub репозиторії",
+        repoPlaceholder: "https://github.com/user/repo",
+        addBtn: "Додати",
+        syncAll: "🔄 Синхронізувати все",
+        adminToolsTitle: "⚙️ Адмін-інструменти (Пакетна обробка)",
+        analyzeAllBtn: "🧠 Аналізувати все",
+        deleteAllBtn: "🗑️ Видалити все",
+        workflowDetailsTitle: "Деталі воркфлоу",
+        detailsSummary: "Опис та мета",
+        detailsCases: "Сценарії використання",
+        detailsintegrations: "Інтеграції",
+        detailsAudience: "Цільова аудиторія",
+        deleteConfirm: "Видалити воркфлоу",
+        copyUrl: "Скопіювати URL завантаження",
+        aiAnalysis: "AI Аналіз",
+        lastUpdate: "Оновлено",
+        addedAt: "Додано",
+        toastAuthSuccess: "Вітаємо! Вхід через Google успішний.",
+        toastLogoutSuccess: "Вихід виконано",
+        toastImportUrlEmpty: "Вставте URL",
+        toastImportGDriveEmpty: "Вставте посилання на Google Drive",
+        toastImportJsonEmpty: "Вставте JSON",
+        toastImportFilesEmpty: "Оберіть файли",
+        toastImportSuccess: "Імпорт завершено! Додано: {imported} воркфлоу",
+        toastImported: "Імпортовано: {imported}, дублікатів: {duplicates}",
+        toastImportedSingle: "Імпортовано: {name}",
+        toastImportError: "Помилка імпорту",
+        toastImportGDriveError: "Помилка імпорту з Google Drive",
+        toastDuplicate: "Дублікат",
+        toastAnalyzeAI: "Аналізую через AI...",
+        toastAnalyzeReady: "Аналіз готовий! Корисність: {usefulness}/10",
+        toastAnalyzeError: "Помилка аналізу",
+        toastAnalyzeBatch: "Запускаю AI-аналіз {limit} воркфлоу...",
+        toastAnalyzedBatch: "Проаналізовано: {analyzed}, помилок: {errors}, залишилось: {remaining}",
+        toastAnalyzeAllConfirm: "Це запустить масовий аналіз всіх воркфлоу без оцінок. Це може зайняти деякий час (1 воркфлоу ≈ 1 сек). Продовжити?",
+        toastAnalyzeAllRunning: "Запуск масового аналізу...",
+        toastAnalyzeAllDone: "Готово! Проаналізовано: {analyzed}, залишилось: {remaining}",
+        toastAnalyzeAllError: "Помилка при запуску",
+        toastClearAllConfirm: "ВИ ВПЕВНЕНІ? Це видалить ВСІ воркфлоу з бази даних. Введіть 'ВИДАЛИТИ' для підтвердження:",
+        toastClearAllRunning: "Видалення всіх воркфлоу...",
+        toastClearAllDone: "Базу повністю очищено",
+        toastClearAllError: "Помилка мережі",
+        toastCopyUrlSuccess: "URL скопійовано! Вставте в n8n → Import from URL",
+        toastCopyJsonSuccess: "JSON скопійовано!",
+        toastRepoImporting: "Імпортую репозиторій...",
+        toastRepoImported: "Імпортовано: {imported}. AI-аналіз запущено у фоні...",
+        toastRepoSyncing: "Синхронізую...",
+        toastRepoSynced: "Синхр: +{imported} нових. AI-аналіз запущено у фоні...",
+        toastRepoSyncAll: "Синхронізую всі репо...",
+        toastRepoSyncAllDone: "Готово! AI-аналіз запущено у фовному режимі...",
+        toastRepoDeleteConfirm: "Видалити репозиторій та його воркфлоу?",
+        toastRepoDeleted: "Видалено",
+        toastError: "Помилка",
+        importing: "Імпортую...",
+        uploadingFromDisk: "Завантажую з Диску...",
+        processing: "Обробка...",
+        completed: "Завершено",
+        statusOk: "OK",
+        statusDuplicate: "Дублікат",
+        statusError: "Помилка",
+        statusNetworkError: "Помилка мережі",
+        noRepos: "Немає репозиторіїв",
+        repoWorkflows: "Воркфлоу",
+        repoSynced: "Синхр",
+        repoNever: "ніколи",
+        deleteWorkflowConfirm: "Видалити цей воркфлоу?",
+        loadingError: "Помилка завантаження",
+        noDescription: "Немає опису",
+        noUseCases: "Сценарії ще не визначено.",
+        noAiAnalysis: "AI-аналіз ще не проведено",
+        aiExplanationTitle: "🤖 AI Пояснення",
+        aiSearchThinking: "Шукаю найкращі рішення...",
+        aiSearchError: "Вибач, сталася помилка: {message}. Спробуй звичайний пошук.",
+        aiFound: "AI знайдено: {count} воркфлоу",
+        found: "Знайдено: {count} воркфлоу",
+        emptyStateTitle: "Нічого не знайдено",
+        emptyStateText: "Спробуйте інший пошуковий запит або {action}",
+        emptyStateActionImport: "імпортуйте воркфлоу",
+        emptyStateActionLogin: "увійдіть щоб імпортувати",
+        aiSummary: "Опис та мета",
+        aiUseCases: "Сценарії використання",
+        aiIntegrations: "Інтеграції",
+        aiAudience: "Цільова аудиторія",
+        aiAnalysisSection: "AI-аналіз",
+        aiTagsSection: "AI-теги",
+        additionalAnalytics: "Додаткова аналітика",
+        level: "Рівень",
+        integrations: "Інтеграції",
+        audience: "Аудиторія",
+        cases: "Кейси",
+        description: "Опис",
+        categories: "Категорії",
+        nodes: "Ноди",
+        triggerType: "Тип тригера",
+        source: "Джерело",
+        json: "JSON",
+        downloadJson: "⬇ Завантажити JSON",
+        copyJson: "📋 Копіювати JSON",
+        copyN8nUrl: "🔗 URL для n8n",
+        delete: "🗑 Видалити",
+        usefulnessScore: "Корисність",
+        universalityScore: "Універсальність",
+        complexityScore: "Складність",
+        scalabilityScore: "Масштабність",
+        workflow: "Воркфлоу",
+        workflowDetails: "Деталі воркфлоу",
+        workflowTrigger: "Workflow",
+        githubRepo: "GitHub Repo"
+      },
+      en: {
+        loginBtn: "Login",
+        importBtn: "Import",
+        reposBtn: "Repositories",
+        searchPlaceholder: "Search workflows (name, nodes, description...)",
+        allCategories: "All Categories",
+        allNodes: "All Nodes",
+        sortNewest: "Newest First",
+        sortPopular: "Usefulness Rating",
+        sortComplex: "Complexity: High",
+        sortSimple: "Complexity: Low",
+        statsTotal: "Workflows",
+        statsRepos: "Repositories",
+        statsNodes: "Unique Nodes",
+        statsAnalyzed: "Analyzed",
+        statsScore: "RAI (Avg Useful)",
+        emptyWorkflows: "No workflows found",
+        viewBtn: "View Details",
+        usefulness: "Usefulness",
+        complexity: "Complexity",
+        scalability: "Scalability",
+        universality: "Universality",
+        difficultyBeginner: "Beginner",
+        difficultyIntermediate: "Intermediate",
+        difficultyAdvanced: "Advanced",
+        nodesCount: "nodes",
+        importModalTitle: "Import Workflow",
+        fileTab: "File",
+        jsonTab: "JSON",
+        urlTab: "URL / GitHub",
+        driveTab: "Google Drive",
+        importPlaceholderUrl: "GitHub folder or file URL...",
+        importPlaceholderJson: "Paste workflow JSON here...",
+        importBtnAction: "Import Now",
+        driveConnect: "Connect Google Drive",
+        authTitle: "Authentication",
+        authText: "Sign in with Google to access Hub features.",
+        authGoogleBtn: "Login with Google",
+        reposTitle: "GitHub Repositories",
+        repoPlaceholder: "https://github.com/user/repo",
+        addBtn: "Add",
+        syncAll: "🔄 Sync All",
+        adminToolsTitle: "⚙️ Admin Tools (Batch Processing)",
+        analyzeAllBtn: "🧠 Analyze All",
+        deleteAllBtn: "🗑️ Delete All",
+        workflowDetailsTitle: "Workflow Details",
+        detailsSummary: "Summary & Purpose",
+        detailsCases: "Use Cases",
+        detailsintegrations: "Integrations",
+        detailsAudience: "Target Audience",
+        deleteConfirm: "Delete Workflow",
+        copyUrl: "Copy Import URL",
+        aiAnalysis: "AI Analysis",
+        lastUpdate: "Updated",
+        addedAt: "Added",
+        toastAuthSuccess: "Welcome! Google login successful.",
+        toastLogoutSuccess: "Logged out",
+        toastImportUrlEmpty: "Please enter a URL",
+        toastImportGDriveEmpty: "Please enter a Google Drive link",
+        toastImportJsonEmpty: "Please paste JSON",
+        toastImportFilesEmpty: "Please select files",
+        toastImportSuccess: "Import completed! Added: {imported} workflows",
+        toastImported: "Imported: {imported}, duplicates: {duplicates}",
+        toastImportedSingle: "Imported: {name}",
+        toastImportError: "Import error",
+        toastImportGDriveError: "Google Drive import error",
+        toastDuplicate: "Duplicate",
+        toastAnalyzeAI: "Analyzing with AI...",
+        toastAnalyzeReady: "Analysis ready! Usefulness: {usefulness}/10",
+        toastAnalyzeError: "Analysis error",
+        toastAnalyzeBatch: "Starting AI analysis for {limit} workflows...",
+        toastAnalyzedBatch: "Analyzed: {analyzed}, errors: {errors}, remaining: {remaining}",
+        toastAnalyzeAllConfirm: "This will start a bulk analysis of all unrated workflows. This may take some time (1 workflow ≈ 1 sec). Continue?",
+        toastAnalyzeAllRunning: "Starting bulk analysis...",
+        toastAnalyzeAllDone: "Done! Analyzed: {analyzed}, remaining: {remaining}",
+        toastAnalyzeAllError: "Error starting analysis",
+        toastClearAllConfirm: "ARE YOU SURE? This will delete ALL workflows from the database. Type 'DELETE' to confirm:",
+        toastClearAllRunning: "Deleting all workflows...",
+        toastClearAllDone: "Database completely cleared",
+        toastClearAllError: "Network error",
+        toastCopyUrlSuccess: "URL copied! Paste into n8n → Import from URL",
+        toastCopyJsonSuccess: "JSON copied!",
+        toastRepoImporting: "Importing repository...",
+        toastRepoImported: "Imported: {imported}. AI analysis started in background...",
+        toastRepoSyncing: "Syncing...",
+        toastRepoSynced: "Synced: +{imported} new. AI analysis started in background...",
+        toastRepoSyncAll: "Syncing all repos...",
+        toastRepoSyncAllDone: "Done! AI analysis started in background...",
+        toastRepoDeleteConfirm: "Delete repository and its workflows?",
+        toastRepoDeleted: "Deleted",
+        toastError: "Error",
+        importing: "Importing...",
+        uploadingFromDisk: "Uploading from Drive...",
+        processing: "Processing...",
+        completed: "Completed",
+        statusOk: "OK",
+        statusDuplicate: "Duplicate",
+        statusError: "Error",
+        statusNetworkError: "Network Error",
+        noRepos: "No repositories",
+        repoWorkflows: "Workflows",
+        repoSynced: "Synced",
+        repoNever: "never",
+        deleteWorkflowConfirm: "Delete this workflow?",
+        loadingError: "Loading error",
+        noDescription: "No description",
+        noUseCases: "No use cases defined yet.",
+        noAiAnalysis: "AI analysis not yet performed",
+        aiExplanationTitle: "🤖 AI Explanation",
+        aiSearchThinking: "Searching for the best solutions...",
+        aiSearchError: "Sorry, an error occurred: {message}. Try a regular search.",
+        aiFound: "AI found: {count} workflows",
+        found: "Found: {count} workflows",
+        emptyStateTitle: "Nothing found",
+        emptyStateText: "Try a different search query or {action}",
+        emptyStateActionImport: "import a workflow",
+        emptyStateActionLogin: "log in to import",
+        aiSummary: "Summary & Purpose",
+        aiUseCases: "Use Cases",
+        aiIntegrations: "Integrations",
+        aiAudience: "Target Audience",
+        aiAnalysisSection: "AI Analysis",
+        aiTagsSection: "AI Tags",
+        additionalAnalytics: "Additional Analytics",
+        level: "Level",
+        integrations: "Integrations",
+        audience: "Audience",
+        cases: "Cases",
+        description: "Description",
+        categories: "Categories",
+        nodes: "Nodes",
+        triggerType: "Trigger Type",
+        source: "Source",
+        json: "JSON",
+        downloadJson: "⬇ Download JSON",
+        copyJson: "📋 Copy JSON",
+        copyN8nUrl: "🔗 URL for n8n",
+        delete: "🗑 Delete",
+        usefulnessScore: "Usefulness",
+        universalityScore: "Universality",
+        complexityScore: "Complexity",
+        scalabilityScore: "Scalability",
+        workflow: "Workflow",
+        workflowDetails: "Workflow Details",
+        workflowTrigger: "Workflow",
+        githubRepo: "GitHub Repo"
+      }
+    };
+
+    function setLang(lang) {
+      currentLang = lang;
+      localStorage.setItem('hub_lang', lang);
+      updateUI();
+      doSearch(); // Reload workflows to show correct language titles
+    }
+
+    function updateUI() {
+      // Toggle active states on buttons
+      document.getElementById('lang-uk').classList.toggle('active', currentLang === 'uk');
+      document.getElementById('lang-en').classList.toggle('active', currentLang === 'en');
+
+      // Update elements with data-i18n
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (i18n[currentLang][key]) {
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.placeholder = i18n[currentLang][key];
+          else el.textContent = i18n[currentLang][key];
+        }
+      });
+
+      // Special titles
+      document.title = i18n[currentLang].title || "n8n Hub";
+
+      // Update filter options that are not dynamically generated
+      document.getElementById('sortSelect').querySelector('option[value="recent"]').textContent = i18n[currentLang].sortNewest;
+      document.getElementById('sortSelect').querySelector('option[value="usefulness"]').textContent = i18n[currentLang].sortPopular;
+      document.getElementById('sortSelect').querySelector('option[value="complexity_asc"]').textContent = i18n[currentLang].sortSimple;
+      document.getElementById('sortSelect').querySelector('option[value="complexity_desc"]').textContent = i18n[currentLang].sortComplex;
+
+      // Update stats labels
+      document.querySelector('#statTotal + .stat-label').textContent = i18n[currentLang].statsTotal;
+      document.querySelector('#statAnalyzed + .stat-label').textContent = i18n[currentLang].statsAnalyzed;
+      document.querySelector('#statNodes + .stat-label').textContent = i18n[currentLang].statsNodes;
+
+      // Update chat bot initial message
+      document.querySelector('.ai-chat-body .ai-bubble-bot').textContent = i18n[currentLang].aiSearchThinking; // This is a placeholder, should be a proper i18n key
+
+      checkAuth(); // Re-render auth section with new language
+    }
+
     // ===== Init =====
     document.addEventListener('DOMContentLoaded', () => {
-      updateAuthUI();
+      updateUI();
       loadStats();
       doSearch();
     });
 
     // ===== Auth =====
-    function updateAuthUI() {
-      if (!authenticated) {
-        if (document.getElementById('loginBtn')) document.getElementById('loginBtn').style.display = '';
-        document.getElementById('importBtn').style.display = 'none';
-        document.getElementById('reposBtn').style.display = 'none';
-      } else {
-        if (document.getElementById('loginBtn')) document.getElementById('loginBtn').style.display = 'none';
-        // Only admin sees management tools
-        document.getElementById('importBtn').style.display = is_admin ? '' : 'none';
-        document.getElementById('reposBtn').style.display = is_admin ? '' : 'none';
-      }
+    async function checkAuth() {
+      try {
+        const r = await fetch('/api/auth/me');
+        const data = await r.json();
+        authenticated = data.authenticated;
+        is_admin = data.is_admin;
+        const section = document.getElementById('authSection');
+        if (authenticated) {
+          section.innerHTML = `
+            <div style="display:flex;align-items:center;gap:12px">
+              ${is_admin ? `<button class="btn btn-sm" onclick="openModal('importModal')" data-i18n="importBtn">${i18n[currentLang].importBtn}</button>` : ''}
+              ${is_admin ? `<button class="btn btn-sm" onclick="openModal('reposModal');loadRepos()" data-i18n="reposBtn">${i18n[currentLang].reposBtn}</button>` : ''}
+              <div class="user-profile">
+                <img src="${data.user.picture}" class="user-avatar" alt="Avatar">
+                <span style="font-size:13px;font-weight:600">${esc(data.user.name)}</span>
+                <button class="btn btn-ghost" onclick="doLogout()" style="padding:4px 8px; font-size:12px" data-i18n="toastLogoutSuccess">${i18n[currentLang].toastLogoutSuccess}</button>
+              </div>
+            </div>
+          `;
+        } else {
+          section.innerHTML = `<button class="btn btn-primary" onclick="openAuthModal()" id="loginBtn" data-i18n="loginBtn">${i18n[currentLang].loginBtn}</button>`;
+        }
+      } catch (e) { }
     }
 
     function doGoogleLogin() {
@@ -1466,14 +1836,14 @@
 
     window.addEventListener('message', (event) => {
       if (event.data === 'auth_success') {
-        toast('Вітаємо! Вхід через Google успішний.', 'success');
+        toast(i18n[currentLang].toastAuthSuccess, 'success');
         setTimeout(() => window.location.reload(), 1000);
       }
     });
 
     async function doLogout() {
       await fetch('/api/logout', { method: 'POST' });
-      toast('Вихід виконано', 'info');
+      toast(i18n[currentLang].toastLogoutSuccess, 'info');
       setTimeout(() => window.location.reload(), 500);
     }
 
@@ -1481,7 +1851,7 @@
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => {
         currentPage = 1;
-        document.getElementById('aiExplanation').innerHTML = ''; // Clear AI explanation on normal search
+        // document.getElementById('aiExplanation').innerHTML = ''; // Clear AI explanation on normal search
         doSearch();
       }, 300);
     });
@@ -1503,7 +1873,7 @@
       // Add bot thinking
       const botDiv = document.createElement('div');
       botDiv.className = 'ai-bubble ai-bubble-bot';
-      botDiv.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px"></div> Шукаю найкращі рішення...';
+      botDiv.innerHTML = `<div class="spinner" style="width:16px;height:16px;border-width:2px"></div> ${i18n[currentLang].aiSearchThinking}`;
       chatBody.appendChild(botDiv);
       chatBody.scrollTop = chatBody.scrollHeight;
 
@@ -1511,11 +1881,11 @@
         const r = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query })
+          body: JSON.stringify({ query, lang: currentLang })
         });
         const data = await r.json();
 
-        botDiv.textContent = data.explanation || "Ось що мені вдалося знайти:";
+        botDiv.textContent = data.explanation || i18n[currentLang].aiSearchThinking; // Fallback to thinking if no explanation
         chatBody.scrollTop = chatBody.scrollHeight;
 
         // Show AI explanation in results area
@@ -1523,7 +1893,7 @@
         const explDiv = document.createElement('div');
         explDiv.id = 'aiExplanation';
         explDiv.className = 'ai-search-explanation';
-        explDiv.innerHTML = `<h4>🤖 AI Пояснення</h4><p>${esc(data.explanation)}</p>`;
+        explDiv.innerHTML = `<h4>${i18n[currentLang].aiExplanationTitle}</h4><p>${esc(data.explanation)}</p>`;
 
         // Clear and render
         resultsArea.innerHTML = '';
@@ -1531,14 +1901,14 @@
 
         renderGrid(data.results);
         renderPagination(data.results);
-        document.getElementById('gridCount').textContent = `AI знайдено: ${data.results.total} воркфлоу`;
+        document.getElementById('gridCount').textContent = i18n[currentLang].aiFound.replace('{count}', data.results.total);
 
         // Switch to results tab if mobile
         if (window.innerWidth < 768) toggleChat();
 
       } catch (e) {
         console.error("AI Search Error:", e);
-        botDiv.textContent = "Вибач, сталася помилка: " + e.message + ". Спробуй звичайний пошук.";
+        botDiv.textContent = i18n[currentLang].aiSearchError.replace('{message}', e.message);
       }
     }
 
@@ -1557,7 +1927,8 @@
       const params = new URLSearchParams({
         q, category: cat, node, page: currentPage,
         sort: document.getElementById('sortSelect').value,
-        min_score: document.getElementById('minScoreFilter').value
+        min_score: document.getElementById('minScoreFilter').value,
+        lang: currentLang
       });
 
       // Active filters display
@@ -1574,10 +1945,10 @@
         renderGrid(data);
         renderPagination(data);
         document.getElementById('gridCount').textContent =
-          `Знайдено: ${data.total} воркфлоу`;
+          i18n[currentLang].found.replace('{count}', data.total);
       } catch (e) {
         document.getElementById('gridContent').innerHTML =
-          '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h3>Помилка завантаження</h3></div>';
+          `<div class="empty-state"><div class="empty-state-icon">⚠️</div><h3>${i18n[currentLang].loadingError}</h3></div>`;
       }
     }
 
@@ -1590,11 +1961,12 @@
     function renderGrid(data) {
       const container = document.getElementById('gridContent');
       if (!data.workflows.length) {
+        const actionText = authenticated ? i18n[currentLang].emptyStateActionImport : i18n[currentLang].emptyStateActionLogin;
         container.innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon">📭</div>
-        <h3>Нічого не знайдено</h3>
-        <p>Спробуйте інший пошуковий запит або ${authenticated ? 'імпортуйте воркфлоу' : 'увійдіть щоб імпортувати'}</p>
+        <h3>${i18n[currentLang].emptyStateTitle}</h3>
+        <p>${i18n[currentLang].emptyStateText.replace('{action}', actionText)}</p>
       </div>`;
         return;
       }
@@ -1605,6 +1977,9 @@
             const cls = wf.ai_usefulness >= 7 ? 'high' : wf.ai_usefulness >= 4 ? 'medium' : 'low';
             scoreHtml = `<span class="wf-score ${cls}">⭐ ${wf.ai_usefulness}</span>`;
           }
+          const summary = currentLang === 'en' && wf.ai_summary_en ? wf.ai_summary_en : wf.ai_summary;
+          const description = currentLang === 'en' && wf.description_en ? wf.description_en : wf.description;
+
           return `
       <div class="wf-card" onclick="openDetail(${wf.id})">
         <div class="wf-card-header">
@@ -1614,12 +1989,12 @@
             <span class="wf-trigger" data-type="${wf.trigger_type}">${wf.trigger_type}</span>
           </div>
         </div>
-        ${wf.ai_summary ? `<div class="wf-desc">${esc(wf.ai_summary)}</div>` : `<div class="wf-desc">${esc(wf.description)}</div>`}
+        ${summary ? `<div class="wf-desc">${esc(summary)}</div>` : `<div class="wf-desc">${esc(description)}</div>`}
         <div class="wf-meta">
           ${(Array.isArray(wf.categories) ? wf.categories : []).map(c => `<span class="wf-cat">${esc(c)}</span>`).join('')}
         </div>
         <div class="wf-footer">
-          <span class="wf-nodes-count">${wf.node_count} нод</span>
+          <span class="wf-nodes-count">${wf.node_count} ${i18n[currentLang].nodesCount}</span>
           <span>${formatDate(wf.added_at)}</span>
         </div>
       </div>
@@ -1658,87 +2033,94 @@
       openModal('detailModal');
       document.getElementById('detailBody').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
       try {
-        const r = await fetch(`/api/workflow/${id}`);
+        const r = await fetch(`/api/workflow/${id}?lang=${currentLang}`);
         const wf = await r.json();
         document.getElementById('detailTitle').textContent = wf.name;
+
+        const summary = currentLang === 'en' && wf.ai_summary_en ? wf.ai_summary_en : wf.ai_summary;
+        const description = currentLang === 'en' && wf.description_en ? wf.description_en : wf.description;
+        const useCases = currentLang === 'en' && wf.ai_use_cases_en ? JSON.parse(wf.ai_use_cases_en || '[]') : JSON.parse(wf.ai_use_cases || '[]');
+        const integrationsSummary = currentLang === 'en' && wf.ai_integrations_summary_en ? wf.ai_integrations_summary_en : wf.ai_integrations_summary;
+        const targetAudience = currentLang === 'en' && wf.ai_target_audience_en ? wf.ai_target_audience_en : wf.ai_target_audience;
+
         document.getElementById('detailBody').innerHTML = `
-      ${wf.ai_summary ? `<div class="ai-summary">🤖 <strong>AI:</strong> ${esc(wf.ai_summary)}</div>` : ''}
+      ${summary ? `<div class="ai-summary">🤖 <strong>AI:</strong> ${esc(summary)}</div>` : ''}
       ${wf.ai_usefulness > 0 ? `
       <div class="detail-section">
-        <h3>AI-аналіз</h3>
+        <h3>${i18n[currentLang].aiAnalysisSection}</h3>
         <div class="ai-scores-grid">
-          <div class="ai-score-item"><div class="ai-score-value">${wf.ai_usefulness}</div><div class="ai-score-label">Корисність</div></div>
-          <div class="ai-score-item"><div class="ai-score-value">${wf.ai_universality}</div><div class="ai-score-label">Універсальність</div></div>
-          <div class="ai-score-item"><div class="ai-score-value">${wf.ai_complexity}</div><div class="ai-score-label">Складність</div></div>
-          <div class="ai-score-item"><div class="ai-score-value">${wf.ai_scalability}</div><div class="ai-score-label">Масштабність</div></div>
+          <div class="ai-score-item"><div class="ai-score-value">${wf.ai_usefulness}</div><div class="ai-score-label">${i18n[currentLang].usefulnessScore}</div></div>
+          <div class="ai-score-item"><div class="ai-score-value">${wf.ai_universality}</div><div class="ai-score-label">${i18n[currentLang].universalityScore}</div></div>
+          <div class="ai-score-item"><div class="ai-score-value">${wf.ai_complexity}</div><div class="ai-score-label">${i18n[currentLang].complexityScore}</div></div>
+          <div class="ai-score-item"><div class="ai-score-value">${wf.ai_scalability}</div><div class="ai-score-label">${i18n[currentLang].scalabilityScore}</div></div>
         </div>
       </div>
       ${(wf.ai_tags || []).length ? `
       <div class="detail-section">
-        <h3>AI-теги</h3>
+        <h3>${i18n[currentLang].aiTagsSection}</h3>
         <div class="detail-nodes">${wf.ai_tags.map(t => `<span class="ai-tag">${esc(t)}</span>`).join('')}</div>
       </div>` : ''}
     
       <div class="detail-section">
-        <h3>Додаткова аналітика</h3>
+        <h3>${i18n[currentLang].additionalAnalytics}</h3>
         <div style="display:flex; flex-direction:column; gap:12px;">
-          ${wf.ai_difficulty_level ? `<div><strong>Рівень:</strong> <span class="wf-trigger" data-type="${wf.ai_difficulty_level}">${wf.ai_difficulty_level}</span></div>` : ''}
-          ${wf.ai_integrations_summary ? `<div><strong>Інтеграції:</strong> <span style="color:var(--text-dim);font-size:14px">${esc(wf.ai_integrations_summary)}</span></div>` : ''}
-          ${wf.ai_target_audience ? `<div><strong>Аудиторія:</strong> <span style="color:var(--text-dim);font-size:14px">${esc(wf.ai_target_audience)}</span></div>` : ''}
-          ${(wf.ai_use_cases || []).length ? `
+          ${wf.ai_difficulty_level ? `<div><strong>${i18n[currentLang].level}:</strong> <span class="wf-trigger" data-type="${wf.ai_difficulty_level}">${wf.ai_difficulty_level}</span></div>` : ''}
+          ${integrationsSummary ? `<div><strong>${i18n[currentLang].integrations}:</strong> <span style="color:var(--text-dim);font-size:14px">${esc(integrationsSummary)}</span></div>` : ''}
+          ${targetAudience ? `<div><strong>${i18n[currentLang].audience}:</strong> <span style="color:var(--text-dim);font-size:14px">${esc(targetAudience)}</span></div>` : ''}
+          ${(useCases || []).length ? `
             <div>
-              <strong>Кейси:</strong>
+              <strong>${i18n[currentLang].cases}:</strong>
               <ul style="margin:8px 0 0 16px; color:var(--text-dim); font-size:14px; padding-left:0;">
-                ${wf.ai_use_cases.map(c => `<li>${esc(c)}</li>`).join('')}
+                ${useCases.map(c => `<li>${esc(c)}</li>`).join('')}
               </ul>
             </div>` : ''}
         </div>
       </div>
       ` : `
       <div class="detail-section">
-        ${is_admin ? `<button class="btn btn-sm" onclick="analyzeWorkflow(${wf.id})">🤖 Аналізувати AI</button>` : '<p style="color:var(--text-muted);font-size:12px">AI-аналіз ще не проведено</p>'}
+        ${is_admin ? `<button class="btn btn-sm" onclick="analyzeWorkflow(${wf.id})">🤖 ${i18n[currentLang].aiAnalysis}</button>` : `<p style="color:var(--text-muted);font-size:12px">${i18n[currentLang].noAiAnalysis}</p>`}
       </div>
       `}
       <div class="detail-section">
-        <h3>Опис</h3>
-        <p style="color:var(--text-dim);font-size:14px">${esc(wf.description) || 'Немає опису'}</p>
+        <h3>${i18n[currentLang].description}</h3>
+        <p style="color:var(--text-dim);font-size:14px">${esc(description) || i18n[currentLang].noDescription}</p>
       </div>
       <div class="detail-section">
-        <h3>Категорії</h3>
+        <h3>${i18n[currentLang].categories}</h3>
         <div class="detail-nodes">
           ${(Array.isArray(wf.categories) ? wf.categories : []).map(c => `<span class="detail-node" style="color:var(--accent)">${esc(c)}</span>`).join('')}
         </div>
       </div>
       <div class="detail-section">
-        <h3>Ноди (${wf.node_count})</h3>
+        <h3>${i18n[currentLang].nodes} (${wf.node_count})</h3>
         <div class="detail-nodes">
           ${(Array.isArray(wf.nodes) ? wf.nodes : []).map(n => `<span class="detail-node">${esc(n)}</span>`).join('')}
         </div>
       </div>
       <div class="detail-section">
-        <h3>Тип тригера</h3>
+        <h3>${i18n[currentLang].triggerType}</h3>
         <span class="wf-trigger" data-type="${wf.trigger_type}" style="display:inline-block">${wf.trigger_type}</span>
       </div>
-      ${wf.source_url ? `<div class="detail-section"><h3>Джерело</h3><a href="${esc(wf.source_url)}" target="_blank" style="color:var(--accent2);font-size:13px;word-break:break-all">${esc(wf.source_url)}</a></div>` : ''}
+      ${wf.source_url ? `<div class="detail-section"><h3>${i18n[currentLang].source}</h3><a href="${esc(wf.source_url)}" target="_blank" style="color:var(--accent2);font-size:13px;word-break:break-all">${esc(wf.source_url)}</a></div>` : ''}
       <div class="detail-section">
-        <h3>JSON</h3>
+        <h3>${i18n[currentLang].json}</h3>
         <div class="json-preview">${esc(wf.json_content?.substring(0, 1500))}${wf.json_content?.length > 1500 ? '\n...' : ''}</div>
       </div>
       <div class="detail-actions">
-        <button class="btn btn-primary" onclick="downloadJson(${wf.id}, '${esc(wf.name)}')">
+        <button class="btn btn-primary" onclick="downloadJson(${wf.id}, '${esc(wf.name)}')" data-i18n="downloadJson">
           ⬇ Завантажити JSON
         </button>
-        <button class="btn" onclick="copyJson(${wf.id})">
+        <button class="btn" onclick="copyJson(${wf.id})" data-i18n="copyJson">
           📋 Копіювати JSON
         </button>
-        <button class="btn" onclick="copyImportUrl(${wf.id})">
+        <button class="btn" onclick="copyImportUrl(${wf.id})" data-i18n="copyN8nUrl">
           🔗 URL для n8n
         </button>
-        ${is_admin ? `<button class="btn btn-danger" onclick="deleteWorkflow(${wf.id})">🗑 Видалити</button>` : ''}
+        ${is_admin ? `<button class="btn btn-danger" onclick="deleteWorkflow(${wf.id})" data-i18n="delete">🗑 Видалити</button>` : ''}
       </div>
     `;
       } catch (e) {
-        document.getElementById('detailBody').innerHTML = '<p style="color:var(--danger)">Помилка завантаження</p>';
+        document.getElementById('detailBody').innerHTML = `<p style="color:var(--danger)">${i18n[currentLang].loadingError}</p>`;
       }
     }
 
@@ -1755,14 +2137,14 @@
       const r = await fetch(`/api/workflow/${id}/json`);
       const text = await r.text();
       await navigator.clipboard.writeText(text);
-      toast('JSON скопійовано!', 'success');
+      toast(i18n[currentLang].toastCopyJsonSuccess, 'success');
     }
 
     async function deleteWorkflow(id) {
-      if (!confirm('Видалити цей воркфлоу?')) return;
+      if (!confirm(i18n[currentLang].deleteWorkflowConfirm)) return;
       await fetch(`/api/workflow/${id}`, { method: 'DELETE' });
       closeModal('detailModal');
-      toast('Видалено', 'info');
+      toast(i18n[currentLang].toastRepoDeleted, 'info');
       doSearch();
       loadStats();
     }
@@ -1770,70 +2152,71 @@
     // ===== Import =====
     async function doImportUrl() {
       const url = document.getElementById('importUrl').value.trim();
-      if (!url) return toast('Вставте URL', 'error');
+      if (!url) return toast(i18n[currentLang].toastImportUrlEmpty, 'error');
       const btn = document.getElementById('importUrlBtn');
-      btn.disabled = true; btn.textContent = 'Імпортую...';
+      btn.disabled = true; btn.textContent = i18n[currentLang].importing;
       try {
         const fd = new FormData(); fd.append('url', url);
         const r = await fetch('/api/import/url', { method: 'POST', body: fd });
         const data = await r.json();
         if (data.status === 'ok') {
           if (data.imported !== undefined) {
-            toast(`Імпортовано: ${data.imported}, дублікатів: ${data.duplicates || 0}`, 'success');
+            toast(i18n[currentLang].toastImported.replace('{imported}', data.imported).replace('{duplicates}', data.duplicates || 0), 'success');
           } else {
-            toast(`Імпортовано: ${data.name}`, 'success');
+            toast(i18n[currentLang].toastImportedSingle.replace('{name}', data.name), 'success');
           }
           doSearch(); loadStats(); reloadFilters();
         } else {
-          toast(data.message || 'Помилка імпорту', 'error');
+          toast(data.message || i18n[currentLang].toastImportError, 'error');
         }
-      } catch (e) { toast('Помилка: ' + e.message, 'error'); }
-      btn.disabled = false; btn.textContent = 'Імпортувати';
+      } catch (e) { toast(i18n[currentLang].toastError + ': ' + e.message, 'error'); }
+      btn.disabled = false; btn.textContent = i18n[currentLang].importBtnAction;
     }
 
     async function doImportGDrive() {
       const url = document.getElementById('importGDrive').value.trim();
-      if (!url) return toast('Вставте посилання на Google Drive', 'error');
+      if (!url) return toast(i18n[currentLang].toastImportGDriveEmpty, 'error');
       const btn = document.getElementById('importGDriveBtn');
-      btn.disabled = true; btn.textContent = 'Завантажую з Диску...';
+      btn.disabled = true; btn.textContent = i18n[currentLang].uploadingFromDisk;
       try {
         const fd = new FormData(); fd.append('url', url);
         const r = await fetch('/api/import/url', { method: 'POST', body: fd });
         const data = await r.json();
         if (data.status === 'ok') {
-          toast(`Імпортовано: ${data.name}`, 'success');
+          toast(i18n[currentLang].toastImportedSingle.replace('{name}', data.name), 'success');
           doSearch(); loadStats(); reloadFilters();
           document.getElementById('importGDrive').value = '';
         } else {
-          toast(data.message || 'Помилка імпорту з Google Drive', 'error');
+          toast(data.message || i18n[currentLang].toastImportGDriveError, 'error');
         }
-      } catch (e) { toast('Помилка: ' + e.message, 'error'); }
-      btn.disabled = false; btn.textContent = 'Імпортувати з Диску';
+      } catch (e) { toast(i18n[currentLang].toastError + ': ' + e.message, 'error'); }
+      btn.disabled = false; btn.textContent = i18n[currentLang].importBtnAction;
     }
 
     async function doImportJson() {
       const json = document.getElementById('importJson').value.trim();
-      if (!json) return toast('Вставте JSON', 'error');
+      if (!json) return toast(i18n[currentLang].toastImportJsonEmpty, 'error');
       const fd = new FormData(); fd.append('json_text', json);
       try {
         const r = await fetch('/api/import/json', { method: 'POST', body: fd });
         const data = await r.json();
         if (data.status === 'ok') {
-          toast(`Імпортовано: ${data.name}`, 'success');
+          toast(i18n[currentLang].toastImportedSingle.replace('{name}', data.name), 'success');
           doSearch(); loadStats(); reloadFilters();
-        } else { toast(data.message || 'Дублікат', 'info'); }
-      } catch (e) { toast('Помилка: ' + e.message, 'error'); }
+        } else { toast(data.message || i18n[currentLang].toastDuplicate, 'info'); }
+      } catch (e) { toast(i18n[currentLang].toastError + ': ' + e.message, 'error'); }
     }
 
     async function doImportFiles() {
       const files = document.getElementById('importFile').files;
-      if (!files.length) return toast('Оберіть файли', 'error');
+      if (!files.length) return toast(i18n[currentLang].toastImportFilesEmpty, 'error');
 
       const statusArea = document.getElementById('importStatusArea');
       const resultsList = document.getElementById('importResultsList');
       const progressContainer = document.getElementById('importProgress');
       const progressFill = document.getElementById('importProgressFill');
       const progressCount = document.getElementById('importProgressCount');
+      const progressText = document.getElementById('importProgressText');
 
       statusArea.style.display = 'block';
       resultsList.innerHTML = '';
@@ -1852,6 +2235,7 @@
         const percent = Math.round(((i) / total) * 100);
         progressFill.style.width = percent + '%';
         progressCount.textContent = `${i}/${total}`;
+        progressText.textContent = i18n[currentLang].processing;
 
         try {
           const fd = new FormData();
@@ -1861,25 +2245,25 @@
 
           let statusHtml = '';
           if (data.status === 'ok') {
-            statusHtml = `<span class="status-badge status-ok">OK</span>`;
+            statusHtml = `<span class="status-badge status-ok">${i18n[currentLang].statusOk}</span>`;
             imported++;
           } else if (data.status === 'duplicate') {
-            statusHtml = `<span class="status-badge status-duplicate">Дублікат</span>`;
+            statusHtml = `<span class="status-badge status-duplicate">${i18n[currentLang].statusDuplicate}</span>`;
           } else {
-            statusHtml = `<span class="status-badge status-error" title="${esc(data.message)}">Помилка</span>`;
+            statusHtml = `<span class="status-badge status-error" title="${esc(data.message)}">${i18n[currentLang].statusError}</span>`;
           }
           row.cells[1].innerHTML = statusHtml;
         } catch (e) {
-          row.cells[1].innerHTML = `<span class="status-badge status-error">Помилка мережі</span>`;
+          row.cells[1].innerHTML = `<span class="status-badge status-error">${i18n[currentLang].statusNetworkError}</span>`;
         }
       }
 
       progressFill.style.width = '100%';
       progressCount.textContent = `${total}/${total}`;
-      document.getElementById('importProgressText').textContent = 'Завершено';
+      progressText.textContent = i18n[currentLang].completed;
 
       if (imported > 0) {
-        toast(`Імпорт завершено! Додано: ${imported} воркфлоу`, 'success');
+        toast(i18n[currentLang].toastImportSuccess.replace('{imported}', imported), 'success');
         doSearch(); loadStats(); reloadFilters();
       }
     }
@@ -1905,75 +2289,75 @@
       const { files } = e.dataTransfer;
       document.getElementById('importFile').files = files;
       // Show file count in drop zone
-      dropZone.querySelector('p').textContent = `Обрано файлів: ${files.length}`;
+      dropZone.querySelector('p').textContent = `${i18n[currentLang].fileSelected}: ${files.length}`; // Need to add fileSelected to i18n
     }, false);
 
     // ===== AI Analysis =====
     async function analyzeWorkflow(id) {
-      toast('Аналізую через AI...', 'info');
+      toast(i18n[currentLang].toastAnalyzeAI, 'info');
       try {
         const r = await fetch(`/api/analyze/${id}`, { method: 'POST' });
         const data = await r.json();
         if (data.status === 'ok') {
-          toast(`Аналіз готовий! Корисність: ${data.scores.usefulness}/10`, 'success');
+          toast(i18n[currentLang].toastAnalyzeReady.replace('{usefulness}', data.scores.usefulness), 'success');
           openDetail(id); // reload detail
           loadStats();
         } else {
-          toast(data.error || 'Помилка аналізу', 'error');
+          toast(data.error || i18n[currentLang].toastAnalyzeError, 'error');
         }
-      } catch (e) { toast('Помилка: ' + e.message, 'error'); }
+      } catch (e) { toast(i18n[currentLang].toastError + ': ' + e.message, 'error'); }
     }
 
     async function analyzeBatch(limit = 50) {
-      toast(`Запускаю AI-аналіз ${limit} воркфлоу...`, 'info');
+      toast(i18n[currentLang].toastAnalyzeBatch.replace('{limit}', limit), 'info');
       try {
         const r = await fetch(`/api/analyze/batch?limit=${limit}`, { method: 'POST' });
         const data = await r.json();
         if (data.status === 'ok') {
-          toast(`Проаналізовано: ${data.analyzed}, помилок: ${data.errors}, залишилось: ${data.remaining}`, 'success');
+          toast(i18n[currentLang].toastAnalyzedBatch.replace('{analyzed}', data.analyzed).replace('{errors}', data.errors).replace('{remaining}', data.remaining), 'success');
           doSearch(); loadStats();
         } else {
-          toast(data.error || 'Помилка', 'error');
+          toast(data.error || i18n[currentLang].toastError, 'error');
         }
-      } catch (e) { toast('Помилка: ' + e.message, 'error'); }
+      } catch (e) { toast(i18n[currentLang].toastError + ': ' + e.message, 'error'); }
     }
 
     async function doAnalyzeAllUnanalyzed() {
-      if (!confirm('Це запустить масовий аналіз всіх воркфлоу без оцінок. Це може зайняти деякий час (1 воркфлоу ≈ 1 сек). Продовжити?')) return;
-      toast('Запуск масового аналізу...', 'info');
+      if (!confirm(i18n[currentLang].toastAnalyzeAllConfirm)) return;
+      toast(i18n[currentLang].toastAnalyzeAllRunning, 'info');
       try {
         const r = await fetch('/api/admin/analyze-all', { method: 'POST' });
         const data = await r.json();
         if (data.status === 'ok') {
-          toast(`Готово! Проаналізовано: ${data.analyzed}, залишилось: ${data.remaining}`, 'success');
+          toast(i18n[currentLang].toastAnalyzeAllDone.replace('{analyzed}', data.analyzed).replace('{remaining}', data.remaining), 'success');
           doSearch(); loadStats();
         } else {
-          toast(data.message || 'Помилка при запуску', 'error');
+          toast(data.message || i18n[currentLang].toastAnalyzeAllError, 'error');
         }
-      } catch (e) { toast('Помилка мережі', 'error'); }
+      } catch (e) { toast(i18n[currentLang].toastError + ': ' + e.message, 'error'); }
     }
 
     async function doClearAllWorkflows() {
-      const code = prompt('ВИ ВПЕВНЕНІ? Це видалить ВСІ воркфлоу з бази даних. Введіть "ВИДАЛИТИ" для підтвердження:');
-      if (code !== 'ВИДАЛИТИ') return;
+      const code = prompt(i18n[currentLang].toastClearAllConfirm);
+      if (code !== 'ВИДАЛИТИ' && code !== 'DELETE') return; // Allow both Ukrainian and English for confirmation
 
-      toast('Видалення всіх воркфлоу...', 'warning');
+      toast(i18n[currentLang].toastClearAllRunning, 'warning');
       try {
         const r = await fetch('/api/admin/clear-all', { method: 'POST' });
         const data = await r.json();
         if (data.status === 'ok') {
-          toast('Базу повністю очищено', 'success');
+          toast(i18n[currentLang].toastClearAllDone, 'success');
           doSearch(); loadStats(); reloadFilters();
         } else {
           toast(data.message, 'error');
         }
-      } catch (e) { toast('Помилка мережі', 'error'); }
+      } catch (e) { toast(i18n[currentLang].toastError + ': ' + e.message, 'error'); }
     }
 
     function copyImportUrl(id) {
       const url = `${window.location.origin}/api/workflow/${id}/import`;
       navigator.clipboard.writeText(url);
-      toast('URL скопійовано! Вставте в n8n → Import from URL', 'success');
+      toast(i18n[currentLang].toastCopyUrlSuccess, 'success');
     }
 
     // ===== Repos =====
@@ -1982,14 +2366,14 @@
         const r = await fetch('/api/repos');
         const repos = await r.json();
         const el = document.getElementById('repoList');
-        if (!repos.length) { el.innerHTML = '<p style="color:var(--text-muted);text-align:center">Немає репозиторіїв</p>'; return; }
+        if (!repos.length) { el.innerHTML = `<p style="color:var(--text-muted);text-align:center">${i18n[currentLang].noRepos}</p>`; return; }
         el.innerHTML = repos.map(repo => `
       <div class="repo-item">
         <div>
           <div class="repo-url">${esc(repo.repo_url)}</div>
           <div class="repo-meta">
-            Воркфлоу: ${repo.workflow_count || 0} · 
-            Синхр: ${repo.last_synced ? formatDate(repo.last_synced) : 'ніколи'}
+            ${i18n[currentLang].repoWorkflows}: ${repo.workflow_count || 0} · 
+            ${i18n[currentLang].repoSynced}: ${repo.last_synced ? formatDate(repo.last_synced) : i18n[currentLang].repoNever}
           </div>
         </div>
         <div class="repo-actions">
@@ -1998,7 +2382,7 @@
         </div>
       </div>
     `).join('');
-      } catch (e) { toast('Помилка', 'error'); }
+      } catch (e) { toast(i18n[currentLang].toastError, 'error'); }
     }
 
     async function doAddRepo() {
