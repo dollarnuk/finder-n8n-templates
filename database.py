@@ -374,3 +374,10 @@ def delete_github_repo(repo_id):
         conn.execute("DELETE FROM workflows WHERE source_repo = ?", (repo["repo_url"],))
         conn.execute("DELETE FROM github_repos WHERE id = ?", (repo_id,))
         conn.commit()
+
+
+def clear_all_workflows():
+    """Wipe all workflows from the database."""
+    conn = get_db()
+    conn.execute("DELETE FROM workflows")
+    conn.commit()

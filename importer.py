@@ -284,6 +284,10 @@ async def import_from_url(url: str, analyze: bool = False) -> dict:
     if "n8n.io/workflows/" in url:
         return await _import_n8n_io(url, analyze=analyze)
 
+    # Google Drive URL
+    if "drive.google.com" in url:
+        return await _import_google_drive(url, analyze=analyze)
+
     return {"status": "error", "message": "Непідтримуваний формат URL"}
 
 
@@ -433,6 +437,38 @@ async def _import_n8n_io(url: str, analyze: bool = False) -> dict:
         workflow = data.get("workflow", data)
         json_str = json.dumps(workflow, ensure_ascii=False)
         return await import_from_json(json_str, source_url=url, analyze=analyze)
+
+
+async def _import_google_drive(url: str, analyze: bool = False) -> dict:
+    """Import from a Google Drive shared file link."""
+    # Extract file ID
+    file_id = ""
+    if "/file/d/" in url:
+        parts = url.split("/file/d/")
+        if len(parts) > 1:
+            file_id = parts[1].split("/")[0].split("?")[0]
+    elif "id=" in url:
+        parts = url.split("id=")
+        if len(parts) > 1:
+            file_id = parts[1].split("&")[0]
+
+    if not file_id:
+        return {"status": "error", "message": "Не вдалося визначити ID файлу Google Drive. Перевірте посилання."}
+
+    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    logger.info(f"Downloading from Google Drive: {download_url}")
+
+    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        resp = await client.get(download_url)
+        if resp.status_code != 200:
+            if "virus" in resp.text.lower():
+                return {"status": "error", "message": "Файл занадто великий для Google Drive scan, або потребує підтвердження. Спробуйте інший метод."}
+            return {"status": "error", "message": f"Google Drive error: HTTP {resp.status_code}"}
+        
+        try:
+            return await import_from_json(resp.text, source_url=url, analyze=analyze)
+        except Exception as e:
+            return {"status": "error", "message": f"Помилка парсингу Google Drive файлу: {str(e)}"}
 
 
 async def sync_github_repo(repo_url: str) -> dict:

@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from database import init_db, search_workflows, get_workflow, delete_workflow, \
-    get_all_nodes, get_all_categories, get_stats, get_github_repos, delete_github_repo
+    get_all_nodes, get_all_categories, get_stats, get_github_repos, delete_github_repo, clear_all_workflows
 from importer import import_from_json, import_from_url, import_from_directory, \
     sync_github_repo, sync_all_repos
 from analyzer import analyze_and_save, analyze_batch
@@ -288,6 +288,29 @@ async def api_analyze_batch(request: Request, limit: int = 50):
     if "error" in result:
         return JSONResponse(result, status_code=400)
     return JSONResponse(result)
+
+
+@app.post("/api/admin/clear-all")
+async def api_admin_clear_all(request: Request):
+    require_auth(request)
+    try:
+        clear_all_workflows()
+        return JSONResponse({"status": "ok", "message": "Усі воркфлоу видалено"})
+    except Exception as e:
+        logger.error(f"Clear all error: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.post("/api/admin/analyze-all")
+async def api_admin_analyze_all(request: Request):
+    require_auth(request)
+    try:
+        # High limit to analyze everything unanalyzed
+        result = await analyze_batch(limit=1000)
+        return JSONResponse(result)
+    except Exception as e:
+        logger.error(f"Analyze all error: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
 
 # ==================== AI Chat Search ====================

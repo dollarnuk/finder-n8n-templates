@@ -1165,6 +1165,7 @@
       <div class="modal-body">
         <div class="import-tabs">
           <button class="import-tab active" onclick="switchTab(this, 'tabUrl')">За посиланням</button>
+          <button class="import-tab" onclick="switchTab(this, 'tabGDrive')">Google Drive</button>
           <button class="import-tab" onclick="switchTab(this, 'tabJson')">JSON</button>
           <button class="import-tab" onclick="switchTab(this, 'tabFile')">Файл</button>
         </div>
@@ -1180,6 +1181,20 @@
           </div>
           <button class="btn btn-primary" onclick="doImportUrl()" id="importUrlBtn">
             Імпортувати
+          </button>
+        </div>
+
+        <div class="import-panel" id="tabGDrive">
+          <div class="form-group">
+            <label class="form-label">Посилання на Google Drive</label>
+            <input type="text" class="form-input" id="importGDrive"
+              placeholder="https://drive.google.com/file/d/.../view">
+            <div class="form-hint">
+              Файл має бути доступним за посиланням (Доступ: Усі, хто має посилання).
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="doImportGDrive()" id="importGDriveBtn">
+            Імпортувати з Диску
           </button>
         </div>
 
@@ -1284,6 +1299,34 @@
         <div class="repo-list" id="repoList">
           <div class="loading">
             <div class="spinner"></div>
+          </div>
+        </div>
+
+        <!-- Admin Batch Tools -->
+        <div style="margin-top:30px; padding-top:20px; border-top:2px dashed var(--border)">
+          <h4 style="margin-bottom:15px; display:flex; align-items:center; gap:8px">
+            ⚙️ Адмін-інструменти (Пакетна обробка)
+          </h4>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+            <div class="admin-tool-card"
+              style="background:var(--bg-light); padding:15px; border-radius:8px; border:1px solid var(--border)">
+              <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+                Запустить AI-аналіз для всіх воркфлоу, які ще не мають оцінок та описів.
+              </p>
+              <button class="btn btn-sm" onclick="doAnalyzeAllUnanalyzed()" style="width:100%; justify-content:center">
+                🧠 Аналізувати все
+              </button>
+            </div>
+            <div class="admin-tool-card"
+              style="background:var(--bg-light); padding:15px; border-radius:8px; border:1px solid var(--border)">
+              <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+                ПОВНІСТЮ очистити базу даних. Усі завантажені воркфлоу будуть видалені!
+              </p>
+              <button class="btn btn-sm" onclick="doClearAllWorkflows()"
+                style="width:100%; justify-content:center; background:rgba(255,50,50,0.1); color:#ff5555; border-color:rgba(255,50,50,0.2)">
+                🗑️ Видалити все
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1673,6 +1716,26 @@
       btn.disabled = false; btn.textContent = 'Імпортувати';
     }
 
+    async function doImportGDrive() {
+      const url = document.getElementById('importGDrive').value.trim();
+      if (!url) return toast('Вставте посилання на Google Drive', 'error');
+      const btn = document.getElementById('importGDriveBtn');
+      btn.disabled = true; btn.textContent = 'Завантажую з Диску...';
+      try {
+        const fd = new FormData(); fd.append('url', url);
+        const r = await fetch('/api/import/url', { method: 'POST', body: fd });
+        const data = await r.json();
+        if (data.status === 'ok') {
+          toast(`Імпортовано: ${data.name}`, 'success');
+          doSearch(); loadStats(); reloadFilters();
+          document.getElementById('importGDrive').value = '';
+        } else {
+          toast(data.message || 'Помилка імпорту з Google Drive', 'error');
+        }
+      } catch (e) { toast('Помилка: ' + e.message, 'error'); }
+      btn.disabled = false; btn.textContent = 'Імпортувати з Диску';
+    }
+
     async function doImportJson() {
       const json = document.getElementById('importJson').value.trim();
       if (!json) return toast('Вставте JSON', 'error');
@@ -1798,6 +1861,38 @@
           toast(data.error || 'Помилка', 'error');
         }
       } catch (e) { toast('Помилка: ' + e.message, 'error'); }
+    }
+
+    async function doAnalyzeAllUnanalyzed() {
+      if (!confirm('Це запустить масовий аналіз всіх воркфлоу без оцінок. Це може зайняти деякий час (1 воркфлоу ≈ 1 сек). Продовжити?')) return;
+      toast('Запуск масового аналізу...', 'info');
+      try {
+        const r = await fetch('/api/admin/analyze-all', { method: 'POST' });
+        const data = await r.json();
+        if (data.status === 'ok') {
+          toast(`Готово! Проаналізовано: ${data.analyzed}, залишилось: ${data.remaining}`, 'success');
+          doSearch(); loadStats();
+        } else {
+          toast(data.message || 'Помилка при запуску', 'error');
+        }
+      } catch (e) { toast('Помилка мережі', 'error'); }
+    }
+
+    async function doClearAllWorkflows() {
+      const code = prompt('ВИ ВПЕВНЕНІ? Це видалить ВСІ воркфлоу з бази даних. Введіть "ВИДАЛИТИ" для підтвердження:');
+      if (code !== 'ВИДАЛИТИ') return;
+
+      toast('Видалення всіх воркфлоу...', 'warning');
+      try {
+        const r = await fetch('/api/admin/clear-all', { method: 'POST' });
+        const data = await r.json();
+        if (data.status === 'ok') {
+          toast('Базу повністю очищено', 'success');
+          doSearch(); loadStats(); reloadFilters();
+        } else {
+          toast(data.message, 'error');
+        }
+      } catch (e) { toast('Помилка мережі', 'error'); }
     }
 
     function copyImportUrl(id) {
