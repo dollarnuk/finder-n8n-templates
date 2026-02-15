@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request, Response, HTTPException, Form, UploadFile,
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from authlib.integrations.starlette_client import OAuth
 from database import init_db, search_workflows, get_workflow, delete_workflow, \
     get_all_nodes, get_all_categories, get_stats, get_github_repos, delete_github_repo, clear_all_workflows, \
     upsert_user, get_user_usage, increment_user_usage, get_user_by_email, \
