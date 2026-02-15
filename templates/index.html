@@ -1036,6 +1036,39 @@
       display: none;
     }
 
+    /* ===== Header AI Status ===== */
+    .header-ai-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(249, 115, 22, 0.1);
+      border: 1px solid rgba(249, 115, 22, 0.2);
+      padding: 4px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-right: 10px;
+    }
+
+    .header-ai-status:hover {
+      background: rgba(249, 115, 22, 0.15);
+      border-color: var(--accent);
+    }
+
+    .header-ai-status .pulse-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: aiPulse 1.5s infinite;
+    }
+
+    .header-ai-status .status-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
     /* ===== Responsive ===== */
     @media (max-width: 768px) {
       .header-inner {
@@ -1275,6 +1308,11 @@
         <div class="lang-switch-group">
           <div class="lang-btn" id="lang-uk" onclick="setLang('uk')">UA</div>
           <div class="lang-btn" id="lang-en" onclick="setLang('en')">EN</div>
+        </div>
+        <div id="headerAiStatus" class="header-ai-status" onclick="openReposModal()" style="display:none">
+          <div class="pulse-dot"></div>
+          <span class="status-text"><span data-i18n="aiProgressTitle">AI Аналіз</span>: <span
+              id="headerAiProgressCount">0/0</span></span>
         </div>
         <div id="premiumHeaderBtn" style="display:none"></div>
         <div id="authSection">
@@ -1666,7 +1704,7 @@
             <thead style="position:sticky; top:0; background:var(--bg-card)">
               <tr>
                 <th data-i18n="userTableName">Користувач</th>
-                <th data-i18n="userTableJoined">Коли приєднався</th>
+                <th data-i18n="userTableJoined">Приєднався</th>
                 <th data-i18n="userTablePlan">План</th>
                 <th data-i18n="userTableUsage">AI Пошуки</th>
               </tr>
@@ -2991,14 +3029,19 @@
         const r = await fetch('/api/admin/analysis-status');
         const data = await r.json();
         const widget = document.getElementById('aiProgressWidget');
+        const headerStatus = document.getElementById('headerAiStatus');
 
         if (data.status === 'running') {
+          // Update Modal Widget
           widget.classList.add('active');
           document.getElementById('aiProgressCount').textContent = `${data.analyzed}/${data.total}`;
-
           const fill = document.getElementById('aiProgressFill');
           const percent = (data.analyzed / data.total) * 100;
           fill.style.width = percent + '%';
+
+          // Update Header Status
+          headerStatus.style.display = 'flex';
+          document.getElementById('headerAiProgressCount').textContent = `${data.analyzed}/${data.total}`;
 
           if (data.errors > 0) {
             document.getElementById('aiProgressErrorTip').style.display = 'block';
@@ -3007,11 +3050,14 @@
             document.getElementById('aiProgressErrorTip').style.display = 'none';
           }
         } else {
-          // If was running but now idle, refresh stats and maybe hide after delay
-          if (widget.classList.contains('active')) {
+          // If was running but now idle, refresh stats and hide indicators
+          if (widget.classList.contains('active') || headerStatus.style.display !== 'none') {
             loadStats();
             doSearch();
-            setTimeout(() => widget.classList.remove('active'), 5000);
+            setTimeout(() => {
+              widget.classList.remove('active');
+              headerStatus.style.display = 'none';
+            }, 3000);
           }
         }
       } catch (e) { console.error("Polling error:", e); }
