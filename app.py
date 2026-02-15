@@ -154,8 +154,12 @@ async def google_login(request: Request):
         raise HTTPException(status_code=500, detail="Google OAuth не налаштовано (відсутні Client ID/Secret)")
     
     redirect_uri = request.url_for('google_auth_callback')
-    # Support HTTPS behind proxy (like EasyPanel)
-    if not str(redirect_uri).startswith("https") and "easypanel.host" in str(redirect_uri):
+    
+    # Support HTTPS behind proxy (like EasyPanel/Cloudflare)
+    # Check X-Forwarded-Proto header first
+    if request.headers.get("x-forwarded-proto") == "https":
+        redirect_uri = str(redirect_uri).replace("http://", "https://")
+    elif "easypanel.host" in str(redirect_uri) and not str(redirect_uri).startswith("https"):
         redirect_uri = str(redirect_uri).replace("http://", "https://")
     
     return await oauth.google.authorize_redirect(request, str(redirect_uri))
