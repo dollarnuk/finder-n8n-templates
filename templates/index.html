@@ -2634,18 +2634,21 @@
 
         try {
           const fd = new FormData();
-          fd.append('file', file);
+          fd.append('files', file); // Field name must match backend 'files'
           const r = await fetch('/api/import/file', { method: 'POST', body: fd });
           const data = await r.json();
 
+          // Get result for THIS specific file (the backend returns a list in results)
+          const fileResult = data.results && data.results.length > 0 ? data.results[0] : { status: 'error', message: 'No result' };
+
           let statusHtml = '';
-          if (data.status === 'ok') {
+          if (fileResult.status === 'ok') {
             statusHtml = `<span class="status-badge status-ok">${i18n[currentLang].statusOk}</span>`;
             imported++;
-          } else if (data.status === 'duplicate') {
+          } else if (fileResult.status === 'duplicate') {
             statusHtml = `<span class="status-badge status-duplicate">${i18n[currentLang].statusDuplicate}</span>`;
           } else {
-            statusHtml = `<span class="status-badge status-error" title="${esc(data.message)}">${i18n[currentLang].statusError}</span>`;
+            statusHtml = `<span class="status-badge status-error" title="${esc(fileResult.message || i18n[currentLang].statusError)}">${i18n[currentLang].statusError}</span>`;
           }
           row.cells[1].innerHTML = statusHtml;
         } catch (e) {

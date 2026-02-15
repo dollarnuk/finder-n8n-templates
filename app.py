@@ -474,9 +474,11 @@ async def api_import_file(request: Request, background_tasks: BackgroundTasks, f
     for file in files:
         try:
             content = await file.read()
-            res = await import_from_json(content.decode("utf-8"), source_url=f"upload:{file.filename}", analyze=False)
+            # use utf-8-sig to handle optional BOM
+            res = await import_from_json(content.decode("utf-8-sig"), source_url=f"upload:{file.filename}", analyze=False)
             results.append({"name": file.filename, "status": res["status"]})
         except Exception as e:
+            logger.error(f"Error importing file {file.filename}: {e}")
             results.append({"name": file.filename, "status": "error", "message": str(e)})
     
     # Schedule background analysis if anything was imported
