@@ -243,12 +243,34 @@ async def analyze_batch(limit: int = 50) -> dict:
             analyzed += 1
             logger.info(f"Analyzed {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
         else:
-            errors += 1
-            error_details.append({"id": wf["id"], "name": wf["name"][:60]})
-            logger.warning(f"Failed to analyze workflow {wf['id']}: {wf['name'][:50]}")
+            # Retry once after a longer pause (likely rate limit)
+            logger.warning(f"First attempt failed for {wf['id']}: {wf['name'][:50]}, retrying in 10s...")
+            await asyncio.sleep(10.0)
+            result = await analyze_workflow(wf_data)
+            if result:
+                update_workflow_ai(
+                    wf["id"],
+                    usefulness=result["usefulness"],
+                    universality=result["universality"],
+                    complexity=result["complexity"],
+                    scalability=result["scalability"],
+                    summary=result["uk"]["summary"],
+                    tags=result["tags"],
+                    use_cases=result["uk"]["use_cases"],
+                    target_audience=result["uk"]["target_audience"],
+                    integrations_summary=result["uk"]["integrations_summary"],
+                    difficulty_level=result["difficulty_level"],
+                    result_en=result["en"]
+                )
+                analyzed += 1
+                logger.info(f"Retry OK {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
+            else:
+                errors += 1
+                error_details.append({"id": wf["id"], "name": wf["name"][:60]})
+                logger.warning(f"Failed to analyze workflow {wf['id']}: {wf['name'][:50]}")
 
-        # Rate limiting: Gemini 1.5 Flash has higher limits, but 1s pause is safe for free tier
-        await asyncio.sleep(1.0)
+        # Rate limiting: Gemini free tier is ~15 RPM, use 4s between requests
+        await asyncio.sleep(4.0)
 
     return {
         "status": "ok",
