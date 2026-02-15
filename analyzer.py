@@ -196,8 +196,8 @@ async def analyze_batch(limit: int = 50) -> dict:
     Returns summary of results including error details.
     """
     global analysis_status
-    if not GEMINI_API_KEY:
-        return {"error": "GEMINI_API_KEY not configured"}
+    if not OPENAI_API_KEY:
+        return {"error": "OPENAI_API_KEY not configured"}
 
     workflows = get_unanalyzed_workflows(limit)
     if not workflows:
