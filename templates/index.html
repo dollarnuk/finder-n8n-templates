@@ -2333,7 +2333,11 @@
         const r = await fetch('/api/admin/analyze-all', { method: 'POST' });
         const data = await r.json();
         if (data.status === 'ok') {
-          toast(i18n[currentLang].toastAnalyzeAllDone.replace('{analyzed}', data.analyzed).replace('{remaining}', data.remaining), 'success');
+          let msg = i18n[currentLang].toastAnalyzeAllDone.replace('{analyzed}', data.analyzed).replace('{remaining}', data.remaining);
+          if (data.errors > 0 && data.error_details && data.error_details.length > 0) {
+            msg += ` | ❌ Помилки (${data.errors}): ` + data.error_details.map(e => e.name).join(', ');
+          }
+          toast(msg, data.errors > 0 ? 'warning' : 'success');
           doSearch(); loadStats();
         } else {
           toast(data.message || i18n[currentLang].toastAnalyzeAllError, 'error');

@@ -199,7 +199,7 @@ async def analyze_and_save(wf_id: int) -> dict:
 
 async def analyze_batch(limit: int = 50) -> dict:
     """Analyze a batch of unanalyzed workflows.
-    Returns summary of results.
+    Returns summary of results including error details.
     """
     if not GEMINI_API_KEY:
         return {"error": "GEMINI_API_KEY not configured"}
@@ -210,6 +210,7 @@ async def analyze_batch(limit: int = 50) -> dict:
 
     analyzed = 0
     errors = 0
+    error_details = []
 
     for wf in workflows:
         # Parse nodes/categories
@@ -243,6 +244,8 @@ async def analyze_batch(limit: int = 50) -> dict:
             logger.info(f"Analyzed {analyzed}/{len(workflows)}: {wf['name'][:50]} → usefulness={result['usefulness']}")
         else:
             errors += 1
+            error_details.append({"id": wf["id"], "name": wf["name"][:60]})
+            logger.warning(f"Failed to analyze workflow {wf['id']}: {wf['name'][:50]}")
 
         # Rate limiting: Gemini 1.5 Flash has higher limits, but 1s pause is safe for free tier
         await asyncio.sleep(1.0)
@@ -252,4 +255,5 @@ async def analyze_batch(limit: int = 50) -> dict:
         "analyzed": analyzed,
         "errors": errors,
         "remaining": len(get_unanalyzed_workflows(1)),
+        "error_details": error_details,
     }
