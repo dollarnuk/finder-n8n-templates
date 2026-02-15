@@ -2653,8 +2653,16 @@
         const r = await fetch('/api/import/json', { method: 'POST', body: fd });
         const data = await r.json();
         if (data.status === 'ok') {
-          toast(i18n[currentLang].toastImportedSingle.replace('{name}', data.name), 'success');
+          if (data.batch) {
+            const msg = i18n[currentLang].toastImported
+              .replace('{imported}', data.imported)
+              .replace('{duplicates}', data.duplicates);
+            toast(msg, 'success');
+          } else {
+            toast(i18n[currentLang].toastImportedSingle.replace('{name}', data.name), 'success');
+          }
           doSearch(); loadStats(); reloadFilters();
+          document.getElementById('importJson').value = '';
         } else { toast(data.message || i18n[currentLang].toastDuplicate, 'info'); }
       } catch (e) { toast(i18n[currentLang].toastError + ': ' + e.message, 'error'); }
     }

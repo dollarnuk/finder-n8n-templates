@@ -171,7 +171,23 @@ def parse_workflow_json(json_str: str) -> dict:
 
 
 async def import_from_json(json_str: str, source_url: str = "", source_repo: str = "", analyze: bool = False) -> dict:
-    """Import a single workflow from raw JSON."""
+    """Import a single workflow or a batch of Hub records (backup)."""
+    try:
+        data = json.loads(json_str)
+        # Check if it's a Hub Export (list of dicts with ai fields)
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict) and "ai_summary" in data[0]:
+            from database import import_hub_records
+            imported, duplicates = import_hub_records(data)
+            return {
+                "status": "ok",
+                "batch": True,
+                "imported": imported,
+                "duplicates": duplicates,
+                "name": f"Backup ({len(data)} items)"
+            }
+    except Exception as e:
+        logger.warning(f"Failed to check for hub-export format: {e}")
+
     parsed = parse_workflow_json(json_str)
     wf_id = insert_workflow(
         name=parsed["name"],

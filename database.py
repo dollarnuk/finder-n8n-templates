@@ -286,6 +286,68 @@ def insert_workflows_batch(workflows_data):
     return imported, duplicates
 
 
+def import_hub_records(records):
+    """
+    Import fully-formed Hub records (backups).
+    records: list of dictionaries representing 'workflows' table rows.
+    """
+    conn = get_db()
+    imported = 0
+    duplicates = 0
+
+    columns = [
+        "name", "description", "nodes", "categories", "node_count",
+        "trigger_type", "source_url", "source_repo", "json_content", "json_hash",
+        "added_at", "updated_at", "ai_usefulness", "ai_universality", "ai_complexity",
+        "ai_scalability", "ai_summary", "ai_tags", "ai_use_cases", "ai_target_audience",
+        "ai_integrations_summary", "ai_summary_en", "ai_use_cases_en", "ai_target_audience_en",
+        "ai_integrations_summary_en", "ai_difficulty_level", "ai_analyzed_at"
+    ]
+
+    placeholders = ", ".join(["?"] * len(columns))
+    col_str = ", ".join(columns)
+
+    try:
+        for rec in records:
+            vals = []
+            for col in columns:
+                val = rec.get(col, "")
+                if col in ["nodes", "categories", "ai_tags", "ai_use_cases", "ai_use_cases_en"]:
+                    if isinstance(val, (list, dict)):
+                        val = json.dumps(val)
+                vals.append(val)
+
+            try:
+                cursor = conn.execute(f"INSERT INTO workflows ({col_str}) VALUES ({placeholders})", vals)
+                wf_id = cursor.lastrowid
+
+                # Update helper tables
+                n_list = rec.get("nodes", [])
+                if isinstance(n_list, str):
+                    try: n_list = json.loads(n_list)
+                    except: n_list = []
+                for node_type in n_list:
+                    conn.execute("INSERT OR IGNORE INTO workflow_nodes VALUES (?, ?)", (wf_id, node_type))
+
+                c_list = rec.get("categories", [])
+                if isinstance(c_list, str):
+                    try: c_list = json.loads(c_list)
+                    except: c_list = []
+                for cat_name in c_list:
+                    conn.execute("INSERT OR IGNORE INTO workflow_categories VALUES (?, ?)", (wf_id, cat_name))
+
+                imported += 1
+            except sqlite3.IntegrityError:
+                duplicates += 1
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    return imported, duplicates
+
+
 def search_workflows(query="", category="", node="", page=1, per_page=24,
                      sort="recent", min_score=0):
     conn = get_db()
