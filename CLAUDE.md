@@ -234,8 +234,8 @@ graph TD
 
 | Змінна | Default | Опис |
 |---|---|---|
-| `ADMIN_USER` | `admin` | Логін адміністратора |
-| `ADMIN_PASS` | `changeme` | Пароль адміністратора |
+| `ADMIN_PASS` | `"changeme"` | Пароль адміністратора (legacy login) |
+| `ADMIN_EMAIL` | `"goodstaffshop@gmail.com"` | Google Email адміністратора (безлімітний AI-пошук) |
 | `SECRET_KEY` | `n8n-hub-secret-key-change-me` | Ключ для підпису сесій |
 | `DB_PATH` | `./workflows.db` | Шлях до SQLite БД |
 | `LOCAL_WORKFLOWS_DIR` | `./data/workflows` | Папка з JSON воркфлоу для автоімпорту при першому запуску |

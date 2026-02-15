@@ -62,7 +62,7 @@ oauth.register(
     }
 )
 
-ADMIN_EMAIL = "goodstaffshop@gmail.com"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "goodstaffshop@gmail.com")
 
 
 async def periodic_sync():
@@ -129,7 +129,8 @@ def is_admin(request: Request) -> bool:
     user = request.session.get("user")
     if not user:
         return False
-    return user.get("email") == ADMIN_EMAIL
+    # Check if legacy admin OR Google admin email
+    return user.get("email") == "admin@local" or user.get("email") == ADMIN_EMAIL
 
 
 def require_auth(request: Request, admin_only: bool = False):
@@ -582,17 +583,24 @@ async def api_chat_search(request: Request, body: dict = None):
     if not user:
         raise HTTPException(status_code=401, detail="Будь ласка, увійдіть, щоб скористатися AI-чатом")
     
-    user_id = user["id"]
-    usage = get_user_usage(user_id)
-    
-    # Bypass limits for admin and pro subscribers
-    if not is_admin(request) and usage["sub_status"] != "active":
-        if usage["ai_chat_count"] >= 3:
-            return JSONResponse({
-                "status": "limit_reached",
-                "message": "Ви використали 3 безкоштовні AI-пошуки. Перейдіть на Pro версію для безлімітного доступу.",
-                "message_en": "You have used 3 free AI searches. Upgrade to Pro for unlimited access."
-            }, status_code=403)
+    user_id = user.get("id")
+    # Bypass limits for admin
+    if is_admin(request):
+        # Admin has no limits and doesn't need usage check if user_id is missing
+        pass
+    else:
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Некоректна сесія. Будь ласка, увійдіть знову.")
+            
+        usage = get_user_usage(user_id)
+        # Bypass limits for pro subscribers
+        if usage["sub_status"] != "active":
+            if usage["ai_chat_count"] >= 3:
+                return JSONResponse({
+                    "status": "limit_reached",
+                    "message": "Ви використали 3 безкоштовні AI-пошуки. Перейдіть на Pro версію для безлімітного доступу.",
+                    "message_en": "You have used 3 free AI searches. Upgrade to Pro for unlimited access."
+                }, status_code=403)
 
     query = (body or {}).get("query", "").strip()
     if not query:
