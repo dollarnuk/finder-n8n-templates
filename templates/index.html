@@ -1292,6 +1292,100 @@
       font-weight: 500;
       color: var(--text);
     }
+
+    /* ===== Drop Zone & File Preview ===== */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 30px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      background: rgba(255, 255, 255, 0.02);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    .drop-zone-icon {
+      font-size: 32px;
+      margin-bottom: 4px;
+    }
+
+    .file-preview-area {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      animation: slideDown 0.2s ease-out;
+    }
+
+    .file-item-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--text-dim);
+      overflow: hidden;
+    }
+
+    .file-item-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-item-size {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+
+    .file-item-remove {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      transition: color 0.2s;
+    }
+
+    .file-item-remove:hover {
+      color: var(--danger);
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
   </style>
 </head>
 
@@ -1473,6 +1567,7 @@
               <p style="font-size:11px; color:var(--text-muted)">Можна вибрати декілька файлів водночас</p>
             </div>
             <input type="file" class="form-input" id="importFile" accept=".json" multiple style="display:none">
+            <div class="file-preview-area" id="filePreviewArea"></div>
           </div>
           <button class="btn btn-primary" onclick="doImportFiles()" data-i18n="importBtnAction">
             Завантажити обране
@@ -2197,6 +2292,35 @@
       loadStats();
       doSearch();
 
+      // File Selection Preview
+      const fileInput = document.getElementById('importFile');
+      if (fileInput) {
+        fileInput.addEventListener('change', renderFilePreview);
+      }
+
+      // Drag and Drop Feedback
+      const dropZone = document.getElementById('dropZone');
+      if (dropZone) {
+        ['dragenter', 'dragover'].forEach(name => {
+          dropZone.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+          });
+        });
+        ['dragleave', 'drop'].forEach(name => {
+          dropZone.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+          });
+        });
+        dropZone.addEventListener('drop', (e) => {
+          const dt = e.dataTransfer;
+          const files = dt.files;
+          fileInput.files = files;
+          renderFilePreview();
+        });
+      }
+
       // Handle payment redirect results
       const params = new URLSearchParams(window.location.search);
       if (params.get('payment') === 'success') {
@@ -2694,6 +2818,48 @@
       }
     }
 
+    function renderFilePreview() {
+      const input = document.getElementById('importFile');
+      const container = document.getElementById('filePreviewArea');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (!input.files.length) return;
+
+      Array.from(input.files).forEach((file, index) => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        const sizeKb = (file.size / 1024).toFixed(1);
+        item.innerHTML = `
+          <div class="file-item-info">
+            <span style="font-size:18px">📄</span>
+            <div style="display:flex;flex-direction:column;overflow:hidden">
+              <span class="file-item-name" title="${esc(file.name)}">${esc(file.name)}</span>
+              <span class="file-item-size">${sizeKb} KB</span>
+            </div>
+          </div>
+          <button class="file-item-remove" onclick="removeFileItem(${index})" title="Видалити">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function removeFileItem(index) {
+      const input = document.getElementById('importFile');
+      const dt = new DataTransfer();
+      const files = input.files;
+      for (let i = 0; i < files.length; i++) {
+        if (i !== index) dt.items.add(files[i]);
+      }
+      input.files = dt.files;
+      renderFilePreview();
+    }
+
     async function doImportFiles() {
       const files = document.getElementById('importFile').files;
       if (!files.length) return toast(i18n[currentLang].toastImportFilesEmpty, 'error');
@@ -3022,6 +3188,8 @@
       document.getElementById('importUrl').value = '';
       document.getElementById('importJson').value = '';
       document.getElementById('importFile').value = '';
+      const preview = document.getElementById('filePreviewArea');
+      if (preview) preview.innerHTML = '';
       document.getElementById('importStatusArea').style.display = 'none';
       if (document.getElementById('importProgress')) {
         document.getElementById('importProgress').style.display = 'none';
