@@ -312,6 +312,10 @@ def import_hub_records(records):
             vals = []
             for col in columns:
                 val = rec.get(col, "")
+                if col == "json_hash" and not val:
+                    import hashlib
+                    json_str = rec.get("json_content", "")
+                    val = hashlib.sha256(json_str.encode()).hexdigest()[:16]
                 if col in ["nodes", "categories", "ai_tags", "ai_use_cases", "ai_use_cases_en"]:
                     if isinstance(val, (list, dict)):
                         val = json.dumps(val)
