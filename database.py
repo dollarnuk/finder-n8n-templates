@@ -316,7 +316,7 @@ def import_hub_records(records):
                     import hashlib
                     json_str = rec.get("json_content", "")
                     val = hashlib.sha256(json_str.encode()).hexdigest()[:16]
-                if col in ["nodes", "categories", "ai_tags", "ai_use_cases", "ai_use_cases_en"]:
+                if col in ["nodes", "categories", "json_content", "ai_tags", "ai_use_cases", "ai_use_cases_en"]:
                     if isinstance(val, (list, dict)):
                         val = json.dumps(val)
                 vals.append(val)
@@ -406,21 +406,39 @@ def search_workflows(query="", category="", node="", page=1, per_page=24,
         "page": page,
         "per_page": per_page,
         "pages": (count + per_page - 1) // per_page,
-        "workflows": [dict(r) for r in rows]
+        "workflows": [_parse_json_fields(dict(r)) for r in rows]
     }
 
 
 def get_workflow(wf_id):
     conn = get_db()
     row = conn.execute("SELECT * FROM workflows WHERE id = ?", (wf_id,)).fetchone()
-    return dict(row) if row else None
+    if not row: return None
+    return _parse_json_fields(dict(row))
 
 
 def get_all_workflows_full():
     """Fetch every record with every column for full export."""
     conn = get_db()
     rows = conn.execute("SELECT * FROM workflows ORDER BY added_at DESC").fetchall()
-    return [dict(r) for r in rows]
+    return [_parse_json_fields(dict(r)) for r in rows]
+
+
+def _parse_json_fields(d):
+    """Helper to parse JSON strings back into objects for a workflow dictionary."""
+    if not d: return d
+    json_cols = ["nodes", "categories", "json_content", "ai_tags", "ai_use_cases", "ai_use_cases_en"]
+    for col in json_cols:
+        val = d.get(col)
+        if isinstance(val, str) and val.strip():
+            try:
+                d[col] = json.loads(val)
+            except:
+                if col in ["nodes", "categories", "ai_tags", "ai_use_cases", "ai_use_cases_en"]:
+                    d[col] = []
+        elif val is None and col in ["nodes", "categories", "ai_tags", "ai_use_cases", "ai_use_cases_en"]:
+            d[col] = []
+    return d
 
 
 def delete_workflow(wf_id):
