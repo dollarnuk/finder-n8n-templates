@@ -575,6 +575,14 @@ async def api_admin_export(request: Request):
     require_auth(request, admin_only=True)
     try:
         data = get_all_workflows_full()
+        # Parse json_content from string back to object for clean export
+        for wf in data:
+            jc = wf.get("json_content")
+            if isinstance(jc, str) and jc.strip():
+                try:
+                    wf["json_content"] = json.loads(jc)
+                except Exception:
+                    pass  # keep as string if parse fails
         from datetime import datetime
         filename = f"n8nhub_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         return JSONResponse(
