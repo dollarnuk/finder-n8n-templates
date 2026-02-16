@@ -427,7 +427,7 @@ def get_all_workflows_full():
 def _parse_json_fields(d):
     """Helper to parse JSON strings back into objects for a workflow dictionary."""
     if not d: return d
-    json_cols = ["nodes", "categories", "json_content", "ai_tags", "ai_use_cases", "ai_use_cases_en"]
+    json_cols = ["nodes", "categories", "ai_tags", "ai_use_cases", "ai_use_cases_en"]
     for col in json_cols:
         val = d.get(col)
         if isinstance(val, str) and val.strip():

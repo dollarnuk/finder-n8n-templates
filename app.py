@@ -403,8 +403,13 @@ async def api_get_workflow_json(wf_id: int):
     wf = get_workflow(wf_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Воркфлоу не знайдено")
+    
+    content = wf["json_content"]
+    if isinstance(content, (dict, list)):
+        content = json.dumps(content, ensure_ascii=False, indent=2)
+        
     return Response(
-        content=wf["json_content"],
+        content=content,
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{wf["name"]}.json"'}
     )
